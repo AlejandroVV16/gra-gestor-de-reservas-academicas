@@ -11,6 +11,8 @@ import Auditorios from '../pages/Auditorios'
 import Personal from '../pages/Personal'
 import Historial from '../pages/Historial'
 import Reportes from '../pages/Reportes'
+import SolicitudExterna from '../pages/SolicitudExterna'
+import SolicitudesExternas from '../pages/SolicitudesExternas'
 
 function ProtectedRoute({ children, soloAdmin = false }) {
   const { user, esAdmin } = useAuth()
@@ -25,6 +27,8 @@ export default function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/solicitud-externa" element={<SolicitudExterna />} />
+
         <Route
           path="/login"
           element={user ? <Navigate to="/dashboard" replace /> : <Login />}
@@ -70,6 +74,11 @@ export default function AppRouter() {
           <Route path="reportes" element={
             <ProtectedRoute soloAdmin>
               <Reportes />
+            </ProtectedRoute>
+          } />
+          <Route path="solicitudes-externas" element={
+            <ProtectedRoute soloAdmin>
+              <SolicitudesExternas />
             </ProtectedRoute>
           } />
         </Route>

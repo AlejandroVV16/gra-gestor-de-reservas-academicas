@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, LogIn, AlertCircle } from 'lucide-react'
+import { useNavigate, Link } from 'react-router-dom'
+import { Eye, EyeOff, LogIn, AlertCircle, ExternalLink } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import escudo from '../resources/escudo-unilibre.png.png'
 
@@ -200,8 +200,25 @@ export default function Login() {
           </div>
         </div>
 
+        {/* Acceso para entidades externas */}
+        <div className="mt-4 border border-white/10 rounded-xl p-4 text-center bg-white/5 backdrop-blur-sm">
+          <p className="text-gray-400 text-xs mb-2">
+            ¿Organización o empresa externa?
+          </p>
+          <Link
+            to="/solicitud-externa"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-[#C8A84B] hover:text-yellow-300 transition-colors"
+          >
+            <ExternalLink size={15} />
+            Solicitar reserva de auditorio
+          </Link>
+          <p className="text-gray-600 text-xs mt-1.5">
+            Sin necesidad de cuenta — formulario público
+          </p>
+        </div>
+
         {/* Tagline institucional */}
-        <p className="text-gray-600 text-xs text-center mt-6 max-w-xs mx-auto leading-relaxed">
+        <p className="text-gray-600 text-xs text-center mt-5 max-w-xs mx-auto leading-relaxed">
           Universidad Libre de Colombia es acreditada de alta calidad.
           <br />
           <em>¡El conocimiento es experiencia de libertad!</em>
