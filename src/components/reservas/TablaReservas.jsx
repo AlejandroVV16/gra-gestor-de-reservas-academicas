@@ -24,44 +24,72 @@ export default function TablaReservas({
 
   if (cargando) return <SkeletonTabla />
 
+  // Columnas: fusionamos H.Inicio + H.Fin en "Horario" para ahorrar una columna
+  // y caber en 1078 px (1366 px – 240 sidebar – 48 px padding) sin squishing
+  const COLS = [
+    'N°', 'Horario', 'Encargado', 'Facultad',
+    'Auditorio', 'Evento', 'Personas', 'TI', 'Estado',
+    ...(esAdmin ? ['Acciones'] : []),
+  ]
+
   return (
     <>
-      {/* Tabla desktop */}
+      {/* ── Tabla desktop ─────────────────────────────────────────────────── */}
+      {/* min-w-[900px] garantiza que cuando el viewport sea < 900+sidebar+padding
+          el div overflow-x-auto muestra scrollbar en lugar de squishing columnas */}
       <div className="hidden lg:block overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-xs min-w-[900px]">
           <thead>
             <tr className="table-header">
-              {['N°', 'H. Inicio', 'H. Fin', 'Encargado', 'Facultad', 'Auditorio', 'Evento', 'Personas', 'Personal TI', 'Estado', ...(esAdmin ? ['Acciones'] : [])].map((col) => (
-                <th key={col} className="px-3 py-3 text-left font-semibold whitespace-nowrap">{col}</th>
+              {COLS.map((col) => (
+                <th key={col} className="px-2 py-2.5 text-left font-semibold whitespace-nowrap">
+                  {col}
+                </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {reservas.length === 0 ? (
               <tr>
-                <td colSpan={esAdmin ? 11 : 10} className="text-center py-16">
+                <td colSpan={COLS.length} className="text-center py-16">
                   <EmptyState />
                 </td>
               </tr>
             ) : reservas.map((r, i) => (
               <tr
                 key={r.id}
-                className={`border-b border-[#E0E0E0] cursor-pointer hover:brightness-95 transition-all ${accentRow(r.auditorio) || (i % 2 === 0 ? 'bg-white' : 'bg-[#F5F5F5]')}`}
+                className={`border-b border-[#E0E0E0] cursor-pointer hover:brightness-95 transition-all ${
+                  accentRow(r.auditorio) || (i % 2 === 0 ? 'bg-white' : 'bg-[#F5F5F5]')
+                }`}
                 onClick={() => setModalReserva(r)}
               >
-                <td className="px-3 py-3 font-medium text-gray-500">#{r.id}</td>
-                <td className="px-3 py-3 font-medium">{r.horaInicio}</td>
-                <td className="px-3 py-3 text-gray-600">{r.horaFin}</td>
-                <td className="px-3 py-3">{r.encargado}</td>
-                <td className="px-3 py-3 text-gray-600 max-w-[120px] truncate">{r.facultad}</td>
-                <td className="px-3 py-3">
-                  <span className="font-medium text-gray-800">{r.auditorio}</span>
+                {/* N° */}
+                <td className="px-2 py-2 font-medium text-gray-400 whitespace-nowrap">
+                  #{r.id}
+                </td>
+
+                {/* Horario — fusión de horaInicio + horaFin */}
+                <td className="px-2 py-2 font-medium whitespace-nowrap">
+                  {r.horaInicio}
+                  <span className="text-gray-400 mx-0.5">–</span>
+                  {r.horaFin}
+                </td>
+
+                {/* Encargado */}
+                <td className="px-2 py-2 max-w-[110px] truncate">{r.encargado}</td>
+
+                {/* Facultad */}
+                <td className="px-2 py-2 text-gray-600 max-w-[110px] truncate">{r.facultad}</td>
+
+                {/* Auditorio + secciones */}
+                <td className="px-2 py-2">
+                  <span className="font-medium text-gray-800 whitespace-nowrap">{r.auditorio}</span>
                   {r.secciones?.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1">
+                    <div className="flex flex-wrap gap-0.5 mt-0.5">
                       {r.secciones.map((s) => (
                         <span
                           key={s}
-                          className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#C8A84B]/15 text-[#8a6e22] border border-[#C8A84B]/30"
+                          className="inline-block px-1 py-0.5 rounded text-[9px] font-semibold bg-[#C8A84B]/15 text-[#8a6e22] border border-[#C8A84B]/30"
                         >
                           {s}
                         </span>
@@ -69,34 +97,44 @@ export default function TablaReservas({
                     </div>
                   )}
                 </td>
-                <td className="px-3 py-3 max-w-[160px] truncate">{r.evento}</td>
-                <td className="px-3 py-3 text-center">{r.personas}</td>
-                <td className="px-3 py-3">
-                  <div className="flex gap-1 flex-wrap">
+
+                {/* Evento */}
+                <td className="px-2 py-2 max-w-[140px] truncate">{r.evento}</td>
+
+                {/* Personas */}
+                <td className="px-2 py-2 text-center">{r.personas}</td>
+
+                {/* Personal TI */}
+                <td className="px-2 py-2">
+                  <div className="flex gap-0.5 flex-wrap">
                     {r.personalTI?.map((p) => (
                       <Avatar key={p.id} nombre={p.nombre} apellido={p.apellido} size="sm" />
                     ))}
                   </div>
                 </td>
-                <td className="px-3 py-3">
+
+                {/* Estado */}
+                <td className="px-2 py-2">
                   <EstadoBadge estado={r.estado} />
                 </td>
+
+                {/* Acciones (solo admin) */}
                 {esAdmin && (
-                  <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex gap-1">
+                  <td className="px-2 py-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex gap-0.5">
                       <button
                         onClick={() => navigate(`/reservas/${r.id}/editar`)}
                         className="p-1.5 hover:bg-blue-50 rounded text-blue-600"
                         title="Editar"
                       >
-                        <Pencil size={15} />
+                        <Pencil size={13} />
                       </button>
                       <button
                         onClick={() => onCancelar(r.id)}
                         className="p-1.5 hover:bg-red-50 rounded text-[#C8171E]"
                         title="Cancelar"
                       >
-                        <Ban size={15} />
+                        <Ban size={13} />
                       </button>
                     </div>
                   </td>
@@ -107,7 +145,7 @@ export default function TablaReservas({
         </table>
       </div>
 
-      {/* Lista móvil (accordion) */}
+      {/* ── Lista móvil (accordion) ─────────────────────────────────────── */}
       <div className="lg:hidden divide-y divide-[#E0E0E0]">
         {reservas.length === 0 ? (
           <div className="py-12"><EmptyState /></div>
@@ -119,20 +157,23 @@ export default function TablaReservas({
               onClick={() => toggleExpand(r.id)}
             >
               <span className="text-gray-400 text-xs w-6">#{r.id}</span>
-              <span className="font-medium text-sm flex-1">{r.horaInicio}</span>
+              <span className="font-medium text-sm flex-1">
+                {r.horaInicio} – {r.horaFin}
+              </span>
               <span className="text-sm text-gray-600 flex-1 truncate">{r.auditorio}</span>
               <EstadoBadge estado={r.estado} />
-              {expandida === r.id ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+              {expandida === r.id
+                ? <ChevronUp size={16} className="text-gray-400" />
+                : <ChevronDown size={16} className="text-gray-400" />}
             </div>
 
             {/* Accordion expandido */}
             {expandida === r.id && (
               <div className="px-3 pb-3 space-y-2 text-sm bg-white/60">
-                <Row label="Hora fin" valor={r.horaFin} />
                 <Row label="Encargado" valor={r.encargado} />
-                <Row label="Facultad" valor={r.facultad} />
-                <Row label="Evento" valor={r.evento} />
-                <Row label="Personas" valor={r.personas} />
+                <Row label="Facultad"  valor={r.facultad}  />
+                <Row label="Evento"    valor={r.evento}    />
+                <Row label="Personas"  valor={r.personas}  />
                 {r.secciones?.length > 0 && (
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-gray-500 w-24 flex-shrink-0">Secciones:</span>
@@ -148,22 +189,31 @@ export default function TablaReservas({
                 )}
                 {r.personalTI?.length > 0 && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-gray-500">Personal TI:</span>
+                    <span className="text-gray-500">TI:</span>
                     {r.personalTI.map((p) => (
                       <Avatar key={p.id} nombre={p.nombre} apellido={p.apellido} size="sm" />
                     ))}
                   </div>
                 )}
                 <div className="flex gap-2 pt-1">
-                  <button onClick={() => setModalReserva(r)} className="btn-secondary text-xs py-1.5 px-3">
+                  <button
+                    onClick={() => setModalReserva(r)}
+                    className="btn-secondary text-xs py-1.5 px-3"
+                  >
                     <Eye size={13} /> Ver detalle
                   </button>
                   {esAdmin && (
                     <>
-                      <button onClick={() => navigate(`/reservas/${r.id}/editar`)} className="btn-primary text-xs py-1.5 px-3">
+                      <button
+                        onClick={() => navigate(`/reservas/${r.id}/editar`)}
+                        className="btn-primary text-xs py-1.5 px-3"
+                      >
                         <Pencil size={13} /> Editar
                       </button>
-                      <button onClick={() => onCancelar(r.id)} className="btn-secondary text-xs py-1.5 px-3 text-[#C8171E]">
+                      <button
+                        onClick={() => onCancelar(r.id)}
+                        className="btn-secondary text-xs py-1.5 px-3 text-[#C8171E]"
+                      >
                         <Ban size={13} /> Cancelar
                       </button>
                     </>
@@ -175,7 +225,7 @@ export default function TablaReservas({
         ))}
       </div>
 
-      {/* Paginación */}
+      {/* ── Paginación ──────────────────────────────────────────────────── */}
       {pages > 1 && (
         <div className="flex items-center justify-center gap-1 p-4 border-t border-[#E0E0E0]">
           <button
@@ -189,7 +239,11 @@ export default function TablaReservas({
             <button
               key={p}
               onClick={() => onPageChange(p)}
-              className={`w-8 h-8 rounded text-sm ${p === page ? 'bg-[#C8171E] text-white' : 'border border-[#E0E0E0] hover:bg-gray-50'}`}
+              className={`w-8 h-8 rounded text-sm ${
+                p === page
+                  ? 'bg-[#C8171E] text-white'
+                  : 'border border-[#E0E0E0] hover:bg-gray-50'
+              }`}
             >
               {p}
             </button>
@@ -204,7 +258,7 @@ export default function TablaReservas({
         </div>
       )}
 
-      {/* Modal detalle */}
+      {/* ── Modal detalle ───────────────────────────────────────────────── */}
       {modalReserva && (
         <ReservaModal
           reserva={modalReserva}

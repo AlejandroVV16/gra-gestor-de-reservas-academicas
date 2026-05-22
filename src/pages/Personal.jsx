@@ -52,58 +52,58 @@ export default function Personal() {
         </button>
       </div>
 
-      {/* Tabla */}
+      {/* Tabla — min-w-[700px] garantiza scroll horizontal antes de squishing */}
       <div className="card overflow-hidden">
         <div className="hidden lg:block overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs min-w-[700px]">
             <thead>
               <tr className="table-header">
-                {['', 'Nombre completo', 'Usuario institucional', 'Rol', 'Estado', 'Última conexión', 'Acciones'].map((col) => (
-                  <th key={col} className="px-4 py-3 text-left font-semibold">{col}</th>
+                {['', 'Nombre completo', 'Usuario', 'Rol', 'Estado', 'Últ. conexión', 'Acciones'].map((col) => (
+                  <th key={col} className="px-3 py-2.5 text-left font-semibold whitespace-nowrap">{col}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {usuarios.map((u, i) => (
                 <tr key={u.id} className={`border-b border-[#E0E0E0] ${i % 2 === 0 ? 'bg-white' : 'bg-[#F5F5F5]'}`}>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2.5">
                     <Avatar nombre={u.nombre} apellido={u.apellido} size="md" />
                   </td>
-                  <td className="px-4 py-3">
-                    <p className="font-semibold text-[#111111]">{u.nombre} {u.apellido}</p>
-                    <p className="text-xs text-gray-400">{u.correo}</p>
+                  <td className="px-3 py-2.5 max-w-[200px]">
+                    <p className="font-semibold text-[#111111] text-sm truncate">{u.nombre} {u.apellido}</p>
+                    <p className="text-[11px] text-gray-400 truncate">{u.correo}</p>
                   </td>
-                  <td className="px-4 py-3 font-mono text-gray-600 text-xs">{u.usuario}</td>
-                  <td className="px-4 py-3"><RolBadge rol={u.rol} /></td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2.5 font-mono text-gray-600">{u.usuario}</td>
+                  <td className="px-3 py-2.5"><RolBadge rol={u.rol} /></td>
+                  <td className="px-3 py-2.5">
                     <button
                       onClick={() => handleToggle(u)}
-                      className={`relative w-10 h-5 rounded-full transition-colors ${u.estado === 'ACTIVO' ? 'bg-green-500' : 'bg-gray-300'}`}
+                      className={`relative w-9 h-5 rounded-full transition-colors ${u.estado === 'ACTIVO' ? 'bg-green-500' : 'bg-gray-300'}`}
                       title={u.estado === 'ACTIVO' ? 'Activo — clic para desactivar' : 'Inactivo — clic para activar'}
                     >
-                      <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${u.estado === 'ACTIVO' ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                      <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${u.estado === 'ACTIVO' ? 'translate-x-4' : 'translate-x-0.5'}`} />
                     </button>
                   </td>
-                  <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
+                  <td className="px-3 py-2.5 text-gray-500 whitespace-nowrap">
                     {u.ultimaConexion
-                      ? format(new Date(u.ultimaConexion), "dd/MM/yyyy 'a las' HH:mm", { locale: es })
+                      ? format(new Date(u.ultimaConexion), 'dd/MM/yy HH:mm', { locale: es })
                       : '—'}
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-1">
+                  <td className="px-3 py-2.5">
+                    <div className="flex gap-0.5">
                       <button
                         onClick={() => setModal(u)}
                         className="p-1.5 hover:bg-blue-50 rounded text-blue-600"
                         title="Editar"
                       >
-                        <Pencil size={15} />
+                        <Pencil size={13} />
                       </button>
                       <button
                         onClick={() => handleToggle(u)}
                         className={`p-1.5 rounded ${u.estado === 'ACTIVO' ? 'hover:bg-red-50 text-[#C8171E]' : 'hover:bg-green-50 text-green-600'}`}
                         title={u.estado === 'ACTIVO' ? 'Desactivar' : 'Activar'}
                       >
-                        <PowerOff size={15} />
+                        <PowerOff size={13} />
                       </button>
                     </div>
                   </td>

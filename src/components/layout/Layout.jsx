@@ -21,7 +21,7 @@ export default function Layout() {
         overflow-y-auto aquí (no en main) para que el scroll sea
         del área completa debajo del header.
       */}
-      <div className="flex-1 flex flex-col min-w-0 lg:ml-[240px] h-screen overflow-y-auto">
+      <div className="flex-1 flex flex-col min-w-0 lg:ml-[240px] h-screen overflow-y-auto overflow-x-hidden">
         <Header onMenuToggle={() => setSidebarOpen(true)} />
 
         {/*

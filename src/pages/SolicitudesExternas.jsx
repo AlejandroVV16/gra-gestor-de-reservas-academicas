@@ -38,59 +38,78 @@ const ESTADOS_FILTRO = ['Todos', 'PENDIENTE', 'APROBADA', 'RECHAZADA', 'CANCELAD
 const SEDES_FILTRO   = ['Todas', 'CENTRO', 'BELMONTE']
 
 function Filtros({ filtros, onChange }) {
+  const inputCls = 'border border-[#E0E0E0] rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#C8171E]/30 focus:border-[#C8171E]'
   return (
-    <div className="flex flex-wrap gap-3 mb-5">
-      {/* Búsqueda */}
-      <div className="relative flex-1 min-w-[200px]">
-        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+    /* flex-wrap asegura que a 1366px los controles no se superpongan;
+       en pantallas grandes (≥1200px) caben todos en una sola fila */
+    <div className="flex flex-wrap items-end gap-2 mb-5">
+
+      {/* Búsqueda — crece para ocupar el espacio disponible */}
+      <div className="relative flex-1 min-w-[180px] max-w-xs">
+        <label className="block text-xs font-medium text-gray-500 mb-1">Buscar</label>
+        <Search size={14} className="absolute left-3 bottom-2.5 text-gray-400 pointer-events-none" />
         <input
           type="text"
-          placeholder="Buscar entidad, evento o NIT..."
+          placeholder="Entidad, evento, NIT..."
           value={filtros.busqueda}
           onChange={(e) => onChange({ ...filtros, busqueda: e.target.value })}
-          className="w-full pl-9 pr-3 py-2 border border-[#E0E0E0] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#C8171E]/30 focus:border-[#C8171E]"
+          className={`${inputCls} w-full pl-8 pr-3`}
         />
       </div>
 
       {/* Estado */}
-      <select
-        value={filtros.estado}
-        onChange={(e) => onChange({ ...filtros, estado: e.target.value })}
-        className="border border-[#E0E0E0] rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#C8171E]/30"
-      >
-        {ESTADOS_FILTRO.map((e) => (
-          <option key={e} value={e}>{e === 'Todos' ? 'Todos los estados' : CFG_ESTADO[e]?.label}</option>
-        ))}
-      </select>
+      <div>
+        <label className="block text-xs font-medium text-gray-500 mb-1">Estado</label>
+        <select
+          value={filtros.estado}
+          onChange={(e) => onChange({ ...filtros, estado: e.target.value })}
+          className={inputCls}
+        >
+          {ESTADOS_FILTRO.map((e) => (
+            <option key={e} value={e}>
+              {e === 'Todos' ? 'Todos' : CFG_ESTADO[e]?.label}
+            </option>
+          ))}
+        </select>
+      </div>
 
       {/* Sede */}
-      <select
-        value={filtros.sede}
-        onChange={(e) => onChange({ ...filtros, sede: e.target.value })}
-        className="border border-[#E0E0E0] rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#C8171E]/30"
-      >
-        {SEDES_FILTRO.map((s) => (
-          <option key={s} value={s}>{s === 'Todas' ? 'Todas las sedes' : s.charAt(0) + s.slice(1).toLowerCase()}</option>
-        ))}
-      </select>
+      <div>
+        <label className="block text-xs font-medium text-gray-500 mb-1">Sede</label>
+        <select
+          value={filtros.sede}
+          onChange={(e) => onChange({ ...filtros, sede: e.target.value })}
+          className={inputCls}
+        >
+          {SEDES_FILTRO.map((s) => (
+            <option key={s} value={s}>
+              {s === 'Todas' ? 'Todas' : s.charAt(0) + s.slice(1).toLowerCase()}
+            </option>
+          ))}
+        </select>
+      </div>
 
-      {/* Fecha desde */}
-      <input
-        type="date"
-        value={filtros.fechaDesde}
-        onChange={(e) => onChange({ ...filtros, fechaDesde: e.target.value })}
-        className="border border-[#E0E0E0] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8171E]/30"
-        title="Fecha desde"
-      />
-
-      {/* Fecha hasta */}
-      <input
-        type="date"
-        value={filtros.fechaHasta}
-        onChange={(e) => onChange({ ...filtros, fechaHasta: e.target.value })}
-        className="border border-[#E0E0E0] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8171E]/30"
-        title="Fecha hasta"
-      />
+      {/* Rango de fechas — agrupados para compactar */}
+      <div className="flex items-end gap-2">
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Desde</label>
+          <input
+            type="date"
+            value={filtros.fechaDesde}
+            onChange={(e) => onChange({ ...filtros, fechaDesde: e.target.value })}
+            className={inputCls}
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Hasta</label>
+          <input
+            type="date"
+            value={filtros.fechaHasta}
+            onChange={(e) => onChange({ ...filtros, fechaHasta: e.target.value })}
+            className={inputCls}
+          />
+        </div>
+      </div>
     </div>
   )
 }
@@ -128,11 +147,11 @@ const COLS = ['N°', 'Entidad', 'Evento', 'Auditorio', 'Fecha', 'Estado', 'Pago'
 function TablaDesktop({ solicitudes, onVerDetalle }) {
   return (
     <div className="hidden lg:block overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="w-full text-xs min-w-[820px]">
         <thead>
           <tr className="table-header">
             {COLS.map((c) => (
-              <th key={c} className="px-3 py-3 text-left font-semibold whitespace-nowrap">
+              <th key={c} className="px-2.5 py-2.5 text-left font-semibold whitespace-nowrap">
                 {c}
               </th>
             ))}
@@ -154,10 +173,10 @@ function TablaDesktop({ solicitudes, onVerDetalle }) {
                 }`}
                 onClick={() => onVerDetalle(s)}
               >
-                <td className="px-3 py-3 font-medium text-gray-500 whitespace-nowrap">
+                <td className="px-2.5 py-2 font-medium text-gray-500 whitespace-nowrap">
                   {s.id}
                 </td>
-                <td className="px-3 py-3 max-w-[160px]">
+                <td className="px-2.5 py-2 max-w-[160px]">
                   <p className="font-medium text-gray-800 truncate">
                     {s.nombreEntidad || s.nombreContacto}
                   </p>
@@ -165,26 +184,26 @@ function TablaDesktop({ solicitudes, onVerDetalle }) {
                     <p className="text-xs text-gray-400 font-mono">{s.nit}</p>
                   )}
                 </td>
-                <td className="px-3 py-3 max-w-[160px] truncate">{s.nombreEvento}</td>
-                <td className="px-3 py-3 whitespace-nowrap">
+                <td className="px-2.5 py-2 max-w-[160px] truncate">{s.nombreEvento}</td>
+                <td className="px-2.5 py-2 whitespace-nowrap">
                   <span className="text-gray-800">{s.auditorio}</span>
                   <p className="text-xs text-gray-400">
                     {s.sede.charAt(0) + s.sede.slice(1).toLowerCase()}
                   </p>
                 </td>
-                <td className="px-3 py-3 whitespace-nowrap">
+                <td className="px-2.5 py-2 whitespace-nowrap">
                   <p className="text-gray-800">{s.fecha}</p>
                   <p className="text-xs text-gray-400">
                     {s.horaInicio} – {s.horaFin}
                   </p>
                 </td>
-                <td className="px-3 py-3">
+                <td className="px-2.5 py-2">
                   <EstadoBadge cfg={CFG_ESTADO} valor={s.estado} />
                 </td>
-                <td className="px-3 py-3">
+                <td className="px-2.5 py-2">
                   <EstadoBadge cfg={CFG_PAGO} valor={s.estadoPago} />
                 </td>
-                <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                <td className="px-2.5 py-2" onClick={(e) => e.stopPropagation()}>
                   <button
                     onClick={() => onVerDetalle(s)}
                     className="p-1.5 hover:bg-gray-100 rounded text-gray-500"

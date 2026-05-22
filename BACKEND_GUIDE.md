@@ -63,7 +63,8 @@ gra-backend/
 │   │   ├── usuario.py
 │   │   ├── auditorio.py
 │   │   ├── reserva.py
-│   │   └── historial.py
+│   │   ├── historial.py
+│   │   └── solicitud_externa.py ← ★ NUEVO — entidades externas
 │   │
 │   ├── schemas/                 ← Validación de entrada/salida (Pydantic)
 │   │   ├── auth.py
@@ -71,13 +72,15 @@ gra-backend/
 │   │   ├── auditorio.py
 │   │   ├── reserva.py
 │   │   ├── historial.py
-│   │   └── reporte.py
+│   │   ├── reporte.py
+│   │   └── solicitud_externa.py ← ★ NUEVO
 │   │
 │   ├── crud/                    ← Lógica de base de datos (queries)
 │   │   ├── usuario.py
 │   │   ├── auditorio.py
 │   │   ├── reserva.py
-│   │   └── historial.py
+│   │   ├── historial.py
+│   │   └── solicitud_externa.py ← ★ NUEVO
 │   │
 │   └── routers/                 ← Endpoints HTTP (uno por recurso)
 │       ├── auth.py
@@ -85,7 +88,8 @@ gra-backend/
 │       ├── auditorios.py
 │       ├── usuarios.py
 │       ├── historial.py
-│       └── reportes.py
+│       ├── reportes.py
+│       └── solicitudes_externas.py ← ★ NUEVO (incluye endpoint público sin auth)
 │
 ├── alembic/                     ← Migraciones de BD
 ├── alembic.ini
@@ -1204,10 +1208,520 @@ verificar que `allow_origins` en `main.py` incluya exactamente la URL donde corr
 | GET | `/api/historial` | Sí | ADMINISTRADOR | Historial general del sistema |
 | GET | `/api/reportes/resumen` | Sí | ADMINISTRADOR | Datos para las gráficas |
 | GET | `/api/reportes/exportar` | Sí | ADMINISTRADOR | Descargar reporte Excel |
+| **POST** | **`/api/solicitudes-externas`** | **No** | **— (público)** | **Enviar solicitud desde formulario externo** |
+| **GET** | **`/api/solicitudes-externas`** | **Sí** | **ADMINISTRADOR** | **Listar solicitudes con filtros** |
+| **GET** | **`/api/solicitudes-externas/{id}`** | **Sí** | **ADMINISTRADOR** | **Detalle de una solicitud** |
+| **PATCH** | **`/api/solicitudes-externas/{id}/aprobar`** | **Sí** | **ADMINISTRADOR** | **Aprobar y fijar tarifa** |
+| **PATCH** | **`/api/solicitudes-externas/{id}/rechazar`** | **Sí** | **ADMINISTRADOR** | **Rechazar con motivo** |
+| **PATCH** | **`/api/solicitudes-externas/{id}/pago`** | **Sí** | **ADMINISTRADOR** | **Registrar estado del cobro** |
 
 ---
 
-## 17. Migración a PostgreSQL (cuando se apruebe el prototipo)
+---
+
+## 17. ★ Módulo de Solicitudes por Entidades Externas
+
+> Añadido en la iteración 2 del prototipo. Permite que colegios, empresas u otras
+> organizaciones soliciten la reserva de un auditorio sin necesidad de tener cuenta
+> en el sistema. El administrador revisa, aprueba o rechaza cada solicitud y registra
+> el estado del cobro.
+
+### Flujo completo
+
+```
+Entidad externa                Admin (panel interno)
+──────────────                 ─────────────────────
+GET  /solicitud-externa   →    formulario público (React, sin auth)
+POST /api/solicitudes-externas ← envío del formulario
+                               GET  /api/solicitudes-externas   (lista con filtros)
+                               GET  /api/solicitudes-externas/{id}
+                               PATCH /api/solicitudes-externas/{id}/aprobar
+                               PATCH /api/solicitudes-externas/{id}/rechazar
+                               PATCH /api/solicitudes-externas/{id}/pago
+```
+
+---
+
+### Modelo — `app/models/solicitud_externa.py`
+
+```python
+from sqlalchemy import Column, Integer, String, Date, Time, Enum, Numeric, DateTime
+from app.db.base  import Base
+from app.db.types import JSONList
+from datetime     import datetime
+import enum
+
+class EstadoSolicitudEnum(str, enum.Enum):
+    PENDIENTE  = "PENDIENTE"
+    APROBADA   = "APROBADA"
+    RECHAZADA  = "RECHAZADA"
+    CANCELADA  = "CANCELADA"
+
+class EstadoPagoEnum(str, enum.Enum):
+    PENDIENTE_PAGO = "PENDIENTE_PAGO"
+    PAGADO         = "PAGADO"
+    EXENTO         = "EXENTO"
+
+class SolicitudExterna(Base):
+    __tablename__ = "solicitudes_externas"
+
+    id               = Column(String(20),  primary_key=True)   # ej: "SE-001"
+    # ── Datos de la entidad ──────────────────────────────────────────────────
+    nombre_entidad   = Column(String(200), nullable=True)   # null si persona natural
+    tipo_entidad     = Column(String(80),  nullable=False)
+    nit              = Column(String(20),  nullable=True)   # null si persona natural
+    nombre_contacto  = Column(String(150), nullable=False)
+    cargo_contacto   = Column(String(100), nullable=False)
+    correo_contacto  = Column(String(150), nullable=False)
+    telefono_contacto= Column(String(20),  nullable=False)
+    # ── Datos del evento ─────────────────────────────────────────────────────
+    sede             = Column(String(20),  nullable=False)   # "CENTRO" | "BELMONTE"
+    auditorio_id     = Column(Integer,     nullable=False)
+    fecha            = Column(Date,        nullable=False)
+    hora_inicio      = Column(Time,        nullable=False)
+    hora_fin         = Column(Time,        nullable=False)
+    nombre_evento    = Column(String(200), nullable=False)
+    tipo_evento      = Column(String(80),  nullable=False)
+    descripcion_evento= Column(String(600), nullable=False)
+    num_asistentes   = Column(Integer,     nullable=False)
+    requiere_equipos = Column(JSONList,    default=list)  # ej: ["Proyector","Micrófono"]
+    # ── Control administrativo ───────────────────────────────────────────────
+    estado           = Column(Enum(EstadoSolicitudEnum),
+                               default=EstadoSolicitudEnum.PENDIENTE)
+    estado_pago      = Column(Enum(EstadoPagoEnum),
+                               default=EstadoPagoEnum.PENDIENTE_PAGO)
+    tarifa_aplicada  = Column(Numeric(12, 2), nullable=True)
+    referencia_pago  = Column(String(50),  nullable=True)
+    nota_admin       = Column(String(300), nullable=True)
+    motivo_rechazo   = Column(String(300), nullable=True)
+    fecha_solicitud  = Column(DateTime,    default=datetime.utcnow, index=True)
+```
+
+> **ID autoincremental:** generar el ID secuencial con el prefijo `SE-` en el CRUD:
+> ```python
+> ultimo = db.query(SolicitudExterna).order_by(
+>     SolicitudExterna.fecha_solicitud.desc()
+> ).first()
+> num = int(ultimo.id.split("-")[1]) + 1 if ultimo else 1
+> nueva_id = f"SE-{str(num).zfill(3)}"
+> ```
+
+---
+
+### Schemas — `app/schemas/solicitud_externa.py`
+
+```python
+from pydantic   import BaseModel, EmailStr
+from typing     import List, Optional
+from datetime   import date, time, datetime
+from decimal    import Decimal
+
+# ── Entrada (POST público) ────────────────────────────────────────────────────
+class SolicitudExternaCreate(BaseModel):
+    nombreEntidad:    Optional[str] = None
+    tipoEntidad:      str
+    nit:              Optional[str] = None
+    nombreContacto:   str
+    cargoContacto:    str
+    correoContacto:   EmailStr
+    telefonoContacto: str
+    sede:             str
+    auditorioId:      int
+    fecha:            date
+    horaInicio:       str   # "HH:MM"
+    horaFin:          str
+    nombreEvento:     str
+    tipoEvento:       str
+    descripcionEvento: str
+    numAsistentes:    int
+    requiereEquipos:  List[str] = []
+
+# ── Salida (GET) ──────────────────────────────────────────────────────────────
+class SolicitudExternaOut(SolicitudExternaCreate):
+    id:              str
+    auditorio:       str              # nombre del auditorio (join)
+    estado:          str
+    estadoPago:      str
+    tarifaAplicada:  Optional[Decimal] = None
+    referenciaPago:  Optional[str]     = None
+    notaAdmin:       Optional[str]     = None
+    motivoRechazo:   Optional[str]     = None
+    fechaSolicitud:  datetime
+
+    class Config:
+        from_attributes = True
+
+# ── Acción: aprobar ───────────────────────────────────────────────────────────
+class AprobarSolicitud(BaseModel):
+    tarifaAplicada: Decimal
+    notaAdmin:      Optional[str] = None
+
+# ── Acción: rechazar ──────────────────────────────────────────────────────────
+class RechazarSolicitud(BaseModel):
+    motivo: str
+
+# ── Acción: registrar pago ────────────────────────────────────────────────────
+class RegistrarPago(BaseModel):
+    estadoPago:     str   # "PAGADO" | "PENDIENTE_PAGO" | "EXENTO"
+    referenciaPago: Optional[str] = None
+```
+
+---
+
+### Router — `app/routers/solicitudes_externas.py`
+
+```python
+# app/routers/solicitudes_externas.py
+from fastapi    import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+from typing     import Optional
+from app.core.deps   import get_db, require_admin
+from app.models.solicitud_externa import SolicitudExterna, EstadoSolicitudEnum, EstadoPagoEnum
+from app.models.auditorio         import Auditorio
+from app.schemas.solicitud_externa import (
+    SolicitudExternaCreate, SolicitudExternaOut,
+    AprobarSolicitud, RechazarSolicitud, RegistrarPago,
+)
+from datetime import datetime
+
+router = APIRouter()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# POST /solicitudes-externas  ← PÚBLICO, sin autenticación
+# ─────────────────────────────────────────────────────────────────────────────
+@router.post("", status_code=201)
+def crear_solicitud(data: SolicitudExternaCreate, db: Session = Depends(get_db)):
+    """
+    Endpoint público. Recibe el formulario de la entidad externa.
+    No requiere token JWT.
+    """
+    # Verificar que el auditorio existe y está activo
+    auditorio = db.query(Auditorio).filter(
+        Auditorio.id == data.auditorioId,
+        Auditorio.estado == "ACTIVO",
+    ).first()
+    if not auditorio:
+        raise HTTPException(status_code=404, detail="Auditorio no encontrado o inactivo")
+
+    # Generar ID secuencial SE-001, SE-002 ...
+    ultimo = db.query(SolicitudExterna).order_by(
+        SolicitudExterna.fecha_solicitud.desc()
+    ).first()
+    num      = int(ultimo.id.split("-")[1]) + 1 if ultimo else 1
+    nueva_id = f"SE-{str(num).zfill(3)}"
+
+    solicitud = SolicitudExterna(
+        id                = nueva_id,
+        nombre_entidad    = data.nombreEntidad,
+        tipo_entidad      = data.tipoEntidad,
+        nit               = data.nit,
+        nombre_contacto   = data.nombreContacto,
+        cargo_contacto    = data.cargoContacto,
+        correo_contacto   = data.correoContacto,
+        telefono_contacto = data.telefonoContacto,
+        sede              = data.sede.upper(),
+        auditorio_id      = data.auditorioId,
+        fecha             = data.fecha,
+        hora_inicio       = data.horaInicio,
+        hora_fin          = data.horaFin,
+        nombre_evento     = data.nombreEvento,
+        tipo_evento       = data.tipoEvento,
+        descripcion_evento= data.descripcionEvento,
+        num_asistentes    = data.numAsistentes,
+        requiere_equipos  = data.requiereEquipos,
+        fecha_solicitud   = datetime.utcnow(),
+    )
+    db.add(solicitud)
+    db.commit()
+    db.refresh(solicitud)
+    return {"id": solicitud.id}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GET /solicitudes-externas  ← ADMIN
+# ─────────────────────────────────────────────────────────────────────────────
+@router.get("", response_model=list[SolicitudExternaOut])
+def listar_solicitudes(
+    estado:      Optional[str] = Query(None),
+    sede:        Optional[str] = Query(None),
+    fecha_desde: Optional[str] = Query(None),
+    fecha_hasta: Optional[str] = Query(None),
+    db:          Session = Depends(get_db),
+    _admin =     Depends(require_admin),
+):
+    q = db.query(SolicitudExterna)
+    if estado:      q = q.filter(SolicitudExterna.estado == estado.upper())
+    if sede:        q = q.filter(SolicitudExterna.sede   == sede.upper())
+    if fecha_desde: q = q.filter(SolicitudExterna.fecha  >= fecha_desde)
+    if fecha_hasta: q = q.filter(SolicitudExterna.fecha  <= fecha_hasta)
+
+    solicitudes = q.order_by(SolicitudExterna.fecha_solicitud.desc()).all()
+
+    # Enriquecer con nombre del auditorio (join manual para simplicidad)
+    resultado = []
+    for s in solicitudes:
+        aud = db.query(Auditorio).filter(Auditorio.id == s.auditorio_id).first()
+        item = SolicitudExternaOut.model_validate(s)
+        item.auditorio  = aud.nombre if aud else "—"
+        item.horaInicio = str(s.hora_inicio)[:5]
+        item.horaFin    = str(s.hora_fin)[:5]
+        resultado.append(item)
+    return resultado
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GET /solicitudes-externas/{id}  ← ADMIN
+# ─────────────────────────────────────────────────────────────────────────────
+@router.get("/{solicitud_id}", response_model=SolicitudExternaOut)
+def obtener_solicitud(
+    solicitud_id: str,
+    db:    Session = Depends(get_db),
+    _admin =       Depends(require_admin),
+):
+    s = db.query(SolicitudExterna).filter(SolicitudExterna.id == solicitud_id).first()
+    if not s:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+    aud  = db.query(Auditorio).filter(Auditorio.id == s.auditorio_id).first()
+    item = SolicitudExternaOut.model_validate(s)
+    item.auditorio  = aud.nombre if aud else "—"
+    item.horaInicio = str(s.hora_inicio)[:5]
+    item.horaFin    = str(s.hora_fin)[:5]
+    return item
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PATCH /solicitudes-externas/{id}/aprobar  ← ADMIN
+# ─────────────────────────────────────────────────────────────────────────────
+@router.patch("/{solicitud_id}/aprobar")
+def aprobar_solicitud(
+    solicitud_id: str,
+    datos: AprobarSolicitud,
+    db:    Session = Depends(get_db),
+    _admin =       Depends(require_admin),
+):
+    s = db.query(SolicitudExterna).filter(SolicitudExterna.id == solicitud_id).first()
+    if not s:
+        raise HTTPException(404, "Solicitud no encontrada")
+    if s.estado != EstadoSolicitudEnum.PENDIENTE:
+        raise HTTPException(400, f"No se puede aprobar una solicitud en estado {s.estado}")
+
+    s.estado          = EstadoSolicitudEnum.APROBADA
+    s.tarifa_aplicada = datos.tarifaAplicada
+    s.nota_admin      = datos.notaAdmin
+    db.commit()
+    return {"ok": True}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PATCH /solicitudes-externas/{id}/rechazar  ← ADMIN
+# ─────────────────────────────────────────────────────────────────────────────
+@router.patch("/{solicitud_id}/rechazar")
+def rechazar_solicitud(
+    solicitud_id: str,
+    datos: RechazarSolicitud,
+    db:    Session = Depends(get_db),
+    _admin =       Depends(require_admin),
+):
+    s = db.query(SolicitudExterna).filter(SolicitudExterna.id == solicitud_id).first()
+    if not s:
+        raise HTTPException(404, "Solicitud no encontrada")
+    if s.estado != EstadoSolicitudEnum.PENDIENTE:
+        raise HTTPException(400, f"No se puede rechazar una solicitud en estado {s.estado}")
+
+    s.estado          = EstadoSolicitudEnum.RECHAZADA
+    s.motivo_rechazo  = datos.motivo
+    db.commit()
+    return {"ok": True}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PATCH /solicitudes-externas/{id}/pago  ← ADMIN
+# ─────────────────────────────────────────────────────────────────────────────
+@router.patch("/{solicitud_id}/pago")
+def registrar_pago(
+    solicitud_id: str,
+    datos: RegistrarPago,
+    db:    Session = Depends(get_db),
+    _admin =       Depends(require_admin),
+):
+    s = db.query(SolicitudExterna).filter(SolicitudExterna.id == solicitud_id).first()
+    if not s:
+        raise HTTPException(404, "Solicitud no encontrada")
+    if s.estado != EstadoSolicitudEnum.APROBADA:
+        raise HTTPException(400, "Solo se puede registrar el pago en solicitudes aprobadas")
+
+    s.estado_pago     = datos.estadoPago
+    s.referencia_pago = datos.referenciaPago
+    db.commit()
+    return {"ok": True}
+```
+
+---
+
+### Registrar el nuevo router en `app/main.py`
+
+Agregar la importación y el `include_router`:
+
+```python
+# app/main.py  — agregar estas dos líneas a las ya existentes
+
+from app.routers import solicitudes_externas   # ← nueva importación
+
+# dentro de la sección de routers:
+app.include_router(
+    solicitudes_externas.router,
+    prefix="/api/solicitudes-externas",
+    tags=["Solicitudes Externas"],
+)
+```
+
+> ⚠️ **Importante — endpoint público:** El `POST /api/solicitudes-externas` no lleva
+> `Depends(require_admin)` ni `Depends(get_current_user)`, por lo que cualquier persona
+> puede enviarlo sin token. Asegurarse de **no** aplicar un middleware global de auth a
+> este router. El resto de los endpoints del mismo router sí requieren admin.
+
+---
+
+### Contratos de API — Solicitudes Externas
+
+#### `POST /api/solicitudes-externas` — **Público, sin token**
+**Body (camelCase, igual que lo envía el formulario React):**
+```json
+{
+  "nombreEntidad":    "Colegio Técnico Empresarial",
+  "tipoEntidad":      "Institución educativa",
+  "nit":              "800987654-3",
+  "nombreContacto":   "María Fernanda Ospina",
+  "cargoContacto":    "Coordinadora académica",
+  "correoContacto":   "mospina@cteempresarial.edu.co",
+  "telefonoContacto": "3124567890",
+  "sede":             "Centro",
+  "auditorioId":      1,
+  "fecha":            "2026-06-10",
+  "horaInicio":       "09:00",
+  "horaFin":          "12:00",
+  "nombreEvento":     "Feria de orientación vocacional",
+  "tipoEvento":       "Evento cultural",
+  "descripcionEvento": "Descripción detallada del evento con al menos 30 caracteres.",
+  "numAsistentes":    80,
+  "requiereEquipos":  ["Proyector", "Micrófono"]
+}
+```
+> Para **persona natural**: omitir `nombreEntidad` y `nit` (ambos `null`).
+
+**Respuesta 201:**
+```json
+{ "id": "SE-001" }
+```
+**Error 404:** `{ "detail": "Auditorio no encontrado o inactivo" }`
+
+---
+
+#### `GET /api/solicitudes-externas` — requiere `ADMINISTRADOR`
+**Query params (todos opcionales):**
+```
+estado=PENDIENTE        → filtra por estado
+sede=CENTRO
+fecha_desde=2026-06-01
+fecha_hasta=2026-06-30
+```
+**Respuesta 200:** array de objetos `SolicitudExternaOut`
+```json
+[
+  {
+    "id": "SE-001",
+    "nombreEntidad":   "Colegio Técnico Empresarial",
+    "tipoEntidad":     "Institución educativa",
+    "nit":             "800987654-3",
+    "nombreContacto":  "María Fernanda Ospina",
+    "cargoContacto":   "Coordinadora académica",
+    "correoContacto":  "mospina@cteempresarial.edu.co",
+    "telefonoContacto":"3124567890",
+    "sede":            "CENTRO",
+    "auditorioId":     1,
+    "auditorio":       "Benjamín Herrera",
+    "fecha":           "2026-06-10",
+    "horaInicio":      "09:00",
+    "horaFin":         "12:00",
+    "nombreEvento":    "Feria de orientación vocacional",
+    "tipoEvento":      "Evento cultural",
+    "descripcionEvento": "Descripción del evento...",
+    "numAsistentes":   80,
+    "requiereEquipos": ["Proyector", "Micrófono"],
+    "estado":          "PENDIENTE",
+    "estadoPago":      "PENDIENTE_PAGO",
+    "tarifaAplicada":  null,
+    "referenciaPago":  null,
+    "notaAdmin":       null,
+    "motivoRechazo":   null,
+    "fechaSolicitud":  "2026-05-19T10:30:00"
+  }
+]
+```
+
+---
+
+#### `GET /api/solicitudes-externas/{id}` — requiere `ADMINISTRADOR`
+**Respuesta 200:** mismo objeto que un ítem del listado  
+**Error 404:** `{ "detail": "Solicitud no encontrada" }`
+
+---
+
+#### `PATCH /api/solicitudes-externas/{id}/aprobar` — requiere `ADMINISTRADOR`
+**Body:**
+```json
+{ "tarifaAplicada": 850000, "notaAdmin": "Tarifa estándar para entidades educativas." }
+```
+**Respuesta 200:** `{ "ok": true }`  
+**Error 400:** si la solicitud no está en estado `PENDIENTE`
+
+---
+
+#### `PATCH /api/solicitudes-externas/{id}/rechazar` — requiere `ADMINISTRADOR`
+**Body:**
+```json
+{ "motivo": "El auditorio ya tiene una reserva confirmada para esa fecha." }
+```
+**Respuesta 200:** `{ "ok": true }`  
+**Error 400:** si la solicitud no está en estado `PENDIENTE`
+
+---
+
+#### `PATCH /api/solicitudes-externas/{id}/pago` — requiere `ADMINISTRADOR`
+**Body:**
+```json
+{ "estadoPago": "PAGADO", "referenciaPago": "REC-2026-0412" }
+```
+> `estadoPago`: `"PAGADO"` | `"PENDIENTE_PAGO"` | `"EXENTO"`  
+> `referenciaPago`: obligatorio solo si `estadoPago = "PAGADO"`
+
+**Respuesta 200:** `{ "ok": true }`  
+**Error 400:** si la solicitud no está en estado `APROBADA`
+
+---
+
+### Colección Postman — Solicitudes Externas
+
+Agregar a la colección existente `GRA API`:
+
+```
+📁 Solicitudes Externas
+  POST  {{base_url}}/solicitudes-externas              ← sin Auth (público)
+  GET   {{base_url}}/solicitudes-externas
+  GET   {{base_url}}/solicitudes-externas?estado=PENDIENTE
+  GET   {{base_url}}/solicitudes-externas?sede=CENTRO&fecha_desde=2026-06-01
+  GET   {{base_url}}/solicitudes-externas/SE-001
+  PATCH {{base_url}}/solicitudes-externas/SE-001/aprobar
+  PATCH {{base_url}}/solicitudes-externas/SE-001/rechazar
+  PATCH {{base_url}}/solicitudes-externas/SE-001/pago
+```
+
+> **Para el `POST` público:** en Postman, ir a la pestaña **Authorization** de esa
+> request específica y seleccionar **No Auth** (anula la herencia del Bearer global).
+
+---
+
+## 18. Migración a PostgreSQL (cuando se apruebe el prototipo)
 
 Cuando el proyecto pase a producción, el proceso de migrar de SQLite a PostgreSQL
 requiere exactamente **3 pasos**:
@@ -1251,5 +1765,8 @@ equipos      = Column(ARRAY(String), default=[])
 
 ---
 
-*Documento generado para el equipo de backend — GRA v1.0 · Universidad Libre Seccional Pereira*  
-*Base de datos: SQLite (fase prototipo) → PostgreSQL (fase producción)*
+---
+
+*Documento generado para el equipo de backend — GRA v1.1 · Universidad Libre Seccional Pereira*  
+*Base de datos: SQLite (fase prototipo) → PostgreSQL (fase producción)*  
+*Última actualización: módulo Solicitudes por Entidades Externas (iteración 2)*
