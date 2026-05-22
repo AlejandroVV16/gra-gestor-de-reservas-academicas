@@ -54,15 +54,18 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 relative overflow-hidden bg-[#111111]">
+    /*
+      RESPONSIVE FIX:
+      · overflow-y-auto  → permite scroll en pantallas pequeñas (antes overflow-hidden cortaba)
+      · py-6             → respira arriba y abajo cuando el contenido supera la altura del viewport
+      · justify-center   → centrado cuando hay espacio de sobra (1440px, escritorio)
+      El fondo usa position:fixed para que siempre cubra el viewport aunque haya scroll.
+    */
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-6 relative overflow-y-auto bg-[#111111]">
 
       {/* ── SLIDESHOW DE FONDO ─────────────────────────────────────────
-          Las 3 imágenes están apiladas con position:absolute.
-          Solo la imagen activa (bgIndex) tiene opacity-100;
-          las demás tienen opacity-0.
-          transition-opacity duration-[1500ms] produce el crossfade.
-          El orden de z-index garantiza que la nueva imagen se muestra
-          encima mientras la anterior desaparece.
+          fixed en lugar de absolute → el fondo siempre cubre la pantalla
+          aunque el usuario haga scroll en pantallas pequeñas.
       ────────────────────────────────────────────────────────────── */}
       {FONDOS.map((src, i) => (
         <img
@@ -70,11 +73,7 @@ export default function Login() {
           src={src}
           alt=""
           aria-hidden
-          className={`
-            absolute inset-0 w-full h-full object-cover
-            transition-opacity ease-in-out
-            pointer-events-none select-none
-          `}
+          className="fixed inset-0 w-full h-full object-cover transition-opacity ease-in-out pointer-events-none select-none"
           style={{
             transitionDuration: `${FADE_MS}ms`,
             opacity: i === bgIndex ? 1 : 0,
@@ -83,16 +82,15 @@ export default function Login() {
         />
       ))}
 
-      {/* Overlay negro al 82 % → las imágenes se perciben al ~18 %
-          mantiene los tonos oscuros institucionales del login */}
+      {/* Overlay negro al 82 % */}
       <div
-        className="absolute inset-0 pointer-events-none"
+        className="fixed inset-0 pointer-events-none"
         style={{ backgroundColor: 'rgba(0,0,0,0.82)', zIndex: 2 }}
         aria-hidden
       />
 
-      {/* Indicadores de imagen activa (puntos) — z-index 10 */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-2" style={{ zIndex: 10 }}>
+      {/* Indicadores de imagen (puntos) */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 flex gap-2" style={{ zIndex: 10 }}>
         {FONDOS.map((_, i) => (
           <button
             key={i}
@@ -108,40 +106,45 @@ export default function Login() {
       </div>
 
       {/* Franja dorada superior */}
-      <div className="absolute top-0 left-0 right-0 h-1 bg-[#C8A84B]" style={{ zIndex: 10 }} />
+      <div className="fixed top-0 left-0 right-0 h-1 bg-[#C8A84B]" style={{ zIndex: 10 }} />
 
-      {/* Contenido del formulario — z-index 20, por encima del overlay (z:2) */}
+      {/* ── CONTENIDO ──────────────────────────────────────────────────
+          max-w-sm  → ancho máximo 384px (correcto en móvil y escritorio)
+          w-full    → ocupa todo en pantallas muy estrechas
+      ────────────────────────────────────────────────────────────── */}
       <div className="relative w-full max-w-sm" style={{ zIndex: 20 }}>
-        {/* Logo */}
-        <div className="flex flex-col items-center mb-8">
-          {/* Escudo oficial — imagen real de la Universidad Libre */}
+
+        {/* Logo — más pequeño en móvil / 1366px, tamaño completo en 1440px+ */}
+        <div className="flex flex-col items-center mb-4 sm:mb-7">
           <img
             src={escudo}
             alt="Escudo Universidad Libre"
-            className="w-28 h-28 object-contain drop-shadow-2xl mb-3"
+            className="w-20 h-20 sm:w-28 sm:h-28 object-contain drop-shadow-2xl mb-2 sm:mb-3"
           />
-          <h1 className="text-white font-bold text-xl text-center leading-tight">
+          <h1 className="text-white font-bold text-lg sm:text-xl text-center leading-tight">
             Universidad Libre
           </h1>
-          <p className="text-gray-400 text-sm text-center">Seccional Pereira</p>
-          <div className="mt-3 w-12 h-0.5 bg-[#C8A84B] rounded" />
-          <p className="text-gray-300 text-sm mt-3 font-medium">
+          <p className="text-gray-400 text-xs sm:text-sm text-center">Seccional Pereira</p>
+          <div className="mt-2 sm:mt-3 w-10 h-0.5 bg-[#C8A84B] rounded" />
+          <p className="text-gray-300 text-xs sm:text-sm mt-2 sm:mt-3 font-medium">
             Gestor de Reservas Académicas
           </p>
         </div>
 
-        {/* Formulario */}
-        <div className="bg-white rounded-xl shadow-2xl p-8">
-          <h2 className="text-[#111111] font-bold text-lg mb-6">Iniciar sesión</h2>
+        {/* Formulario — padding reducido en pantallas pequeñas */}
+        <div className="bg-white rounded-xl shadow-2xl p-5 sm:p-8">
+          <h2 className="text-[#111111] font-bold text-base sm:text-lg mb-4 sm:mb-6">
+            Iniciar sesión
+          </h2>
 
           {error && (
-            <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 mb-4">
-              <AlertCircle size={16} className="text-[#C8171E] flex-shrink-0" />
-              <p className="text-sm text-[#C8171E]">{error}</p>
+            <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
+              <AlertCircle size={15} className="text-[#C8171E] flex-shrink-0" />
+              <p className="text-xs sm:text-sm text-[#C8171E]">{error}</p>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
             <div>
               <label className="label-field">Usuario institucional</label>
               <input
@@ -181,7 +184,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={cargando}
-              className="w-full bg-[#C8171E] hover:bg-[#a01016] disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition-colors duration-150 flex items-center justify-center gap-2 mt-2"
+              className="w-full bg-[#C8171E] hover:bg-[#a01016] disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-2.5 sm:py-3 rounded-lg transition-colors duration-150 flex items-center justify-center gap-2 mt-1"
             >
               {cargando ? (
                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -193,7 +196,7 @@ export default function Login() {
           </form>
 
           {/* Hint credenciales demo */}
-          <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-[#E0E0E0]">
+          <div className="mt-3 sm:mt-4 p-2.5 sm:p-3 bg-gray-50 rounded-lg border border-[#E0E0E0]">
             <p className="text-xs text-gray-500 font-medium mb-1">Demo (prototipo):</p>
             <p className="text-xs text-gray-400">Admin: <span className="font-mono font-semibold text-gray-600">lindelia / 1234</span></p>
             <p className="text-xs text-gray-400">TI: <span className="font-mono font-semibold text-gray-600">johns / 1234</span></p>
@@ -201,8 +204,8 @@ export default function Login() {
         </div>
 
         {/* Acceso para entidades externas */}
-        <div className="mt-4 border border-white/10 rounded-xl p-4 text-center bg-white/5 backdrop-blur-sm">
-          <p className="text-gray-400 text-xs mb-2">
+        <div className="mt-3 sm:mt-4 border border-white/10 rounded-xl p-3 sm:p-4 text-center bg-white/5 backdrop-blur-sm">
+          <p className="text-gray-400 text-xs mb-1.5">
             ¿Organización o empresa externa?
           </p>
           <Link
@@ -212,13 +215,13 @@ export default function Login() {
             <ExternalLink size={15} />
             Solicitar reserva de auditorio
           </Link>
-          <p className="text-gray-600 text-xs mt-1.5">
+          <p className="text-gray-600 text-xs mt-1">
             Sin necesidad de cuenta — formulario público
           </p>
         </div>
 
         {/* Tagline institucional */}
-        <p className="text-gray-600 text-xs text-center mt-5 max-w-xs mx-auto leading-relaxed">
+        <p className="text-gray-600 text-xs text-center mt-4 mb-2 max-w-xs mx-auto leading-relaxed">
           Universidad Libre de Colombia es acreditada de alta calidad.
           <br />
           <em>¡El conocimiento es experiencia de libertad!</em>
@@ -226,7 +229,7 @@ export default function Login() {
       </div>
 
       {/* Franja dorada inferior */}
-      <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#C8A84B]" style={{ zIndex: 10 }} />
+      <div className="fixed bottom-0 left-0 right-0 h-1 bg-[#C8A84B]" style={{ zIndex: 10 }} />
     </div>
   )
 }
