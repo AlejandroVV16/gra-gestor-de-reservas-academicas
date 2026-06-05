@@ -1,0 +1,51 @@
+services:
+
+  db:
+    image: docker.io/library/postgres:16
+    container_name: auditorios_db
+    restart: always
+    env_file: .env
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./Api/DB/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U Postgres_user -d auditorios_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./Api
+      dockerfile: Dockerfile
+    container_name: auditorios_api
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    volumes:
+      - ./Api:/app
+      - /app/node_modules
+    ports:
+      - "8000:3000"
+    command: sh -c "node /app/wait-for-db.js && npm run dev"
+
+  frontend:
+    build:
+      context: ./Frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ""
+    container_name: auditorios_frontend
+    restart: always
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+volumes:
+  pg_data:
+    driver: local

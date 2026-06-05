@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* CORRECCIÓN 1: base de altura para que sidebar y layout funcionen en h-screen */
+  html, body, #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background-color: #F5F5F5;
+    color: #111111;
+  }
+  /* Scrollbar institucional */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #F5F5F5;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #C8A84B;
+    border-radius: 3px;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-[#C8171E] hover:bg-[#a01016] text-white font-medium px-4 py-2 rounded-lg transition-colors duration-150 flex items-center gap-2;
+  }
+  .btn-secondary {
+    @apply bg-white hover:bg-gray-50 text-gray-700 font-medium px-4 py-2 rounded-lg border border-[#E0E0E0] transition-colors duration-150 flex items-center gap-2;
+  }
+  .btn-danger {
+    @apply bg-white hover:bg-red-50 text-red-700 font-medium px-4 py-2 rounded-lg border border-red-200 transition-colors duration-150 flex items-center gap-2;
+  }
+  .card {
+    @apply bg-white rounded-lg shadow-sm border border-[#E0E0E0];
+  }
+  .input-field {
+    @apply w-full border border-[#E0E0E0] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8171E] focus:border-transparent transition-all;
+  }
+  .label-field {
+    @apply block text-sm font-medium text-gray-700 mb-1;
+  }
+  .table-header {
+    @apply bg-[#111111] text-white text-xs font-semibold uppercase tracking-wide;
+  }
+  .table-row-even {
+    @apply bg-white hover:bg-gray-50 transition-colors;
+  }
+  .table-row-odd {
+    @apply bg-[#F5F5F5] hover:bg-gray-100 transition-colors;
+  }
+}
+
+/* Toast animations */
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+.toast-enter {
+  animation: slideInRight 0.3s ease-out forwards;
+}
+.toast-exit {
+  animation: fadeOut 0.3s ease-in forwards;
+}
+
+/* Skeleton loader */
+@keyframes shimmer {
+  0%   { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background-size: 400px 100%;
+  animation: shimmer 1.2s ease-in-out infinite;
+}
+
+/* FullCalendar overrides institucionales */
+.fc-button-primary {
+  background-color: #C8171E !important;
+  border-color: #C8171E !important;
+}
+.fc-button-primary:hover {
+  background-color: #a01016 !important;
+  border-color: #a01016 !important;
+}
+.fc-button-primary:not(:disabled):active,
+.fc-button-primary:not(:disabled).fc-button-active {
+  background-color: #a01016 !important;
+  border-color: #a01016 !important;
+}
+.fc-toolbar-title {
+  font-size: 1.1rem !important;
+  font-weight: 700 !important;
+}
