@@ -4,6 +4,7 @@ import { getHorario } from '../../api/auditoriosApi'
 
 const HORA_INICIO = 6
 const HORA_FIN = 23
+const MAX_HORA_FIN = 21
 
 function generarBloques(ocupados, fecha) {
   if (!ocupados) return []
@@ -62,7 +63,7 @@ export default function TimelineDiario({ auditorioId, fecha, onTimeSelect, selec
     const disponibles = []
     for (const dur of [4, 6]) {
       const horaFin = horaInicio + dur
-      if (horaFin > HORA_FIN) continue
+      if (horaFin > MAX_HORA_FIN) continue
 
       const libre = Array.from({ length: dur }, (_, i) => horaInicio + i)
         .every((h) => {
@@ -92,6 +93,7 @@ export default function TimelineDiario({ auditorioId, fecha, onTimeSelect, selec
   }
 
   const isSelected = (hora) => {
+    if (startSel !== null && !selected?.horaInicio) return hora === startSel
     if (!selected?.horaInicio) return false
     const h = parseInt(selected.horaInicio.split(':')[0])
     const hFin = parseInt(selected.horaFin.split(':')[0])
@@ -99,9 +101,9 @@ export default function TimelineDiario({ auditorioId, fecha, onTimeSelect, selec
   }
 
   const bloqueEsSeleccionable = (hora) => {
-    if (hora + 4 > HORA_FIN) return false
+    if (hora + 4 > MAX_HORA_FIN) return false
     for (const dur of [4, 6]) {
-      if (hora + dur > HORA_FIN) continue
+      if (hora + dur > MAX_HORA_FIN) continue
       const libre = Array.from({ length: dur }, (_, i) => hora + i)
         .every((h) => {
           const b = bloques.find((b) => b.hora === h)

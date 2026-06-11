@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
-import { Building2, User, Calendar, CheckCircle2, AlertCircle, Loader2, Check, X, Info, Zap } from 'lucide-react'
+import { Building2, User, Calendar, CheckCircle2, AlertCircle, Loader2, Check, X, Info, FileUp, CreditCard } from 'lucide-react'
 import { crearSolicitudExterna } from '../api/solicitudesExternasApi'
 import { getHorario, getAuditoriosActivos } from '../api/auditoriosApi'
+import { getEquiposActivos } from '../api/equiposApi'
 import TimelineDiario from '../components/reservas/TimelineDiario'
+import SelectorAuditorio from '../components/reservas/SelectorAuditorio'
 import escudo from '../resources/escudo-unilibre.png.png'
 
 const TIPOS_ENTIDAD = [
@@ -15,8 +17,6 @@ const TIPOS_ENTIDAD = [
   'Otro',
 ]
 
-const SEDES = ['Centro', 'Belmonte']
-
 const TIPOS_EVENTO = [
   'Conferencia',
   'Seminario',
@@ -26,14 +26,20 @@ const TIPOS_EVENTO = [
   'Otro',
 ]
 
-const EQUIPOS_OPCIONES = ['Proyector', 'Micrófono', 'Cámaras', 'Sillas adicionales']
+const EQUIPOS_OPCIONES = [
+  { id: 'mesas-formica',  nombre: 'Mesas en fórmica',     precio: 13000, porUnidad: true, max: 5  },
+  { id: 'mesas-rimax',    nombre: 'Mesas Rimax',          precio: 6000,  porUnidad: true, max: 5  },
+  { id: 'sillas-rimax',   nombre: 'Sillas Rimax',         precio: 1000,  porUnidad: true, max: 20 },
+  { id: 'otras-sillas',   nombre: 'Otras sillas',         precio: 5000,  porUnidad: true, max: 20 },
+  { id: 'microfono',      nombre: 'Micrófonos',           precio: 85000, porUnidad: true, max: 3  },
+  { id: 'manteles',       nombre: 'Manteles',             precio: 11000, porUnidad: true, max: 5  },
+  { id: 'sobre-mantel',   nombre: 'Sobre manteles',       precio: 9000,  porUnidad: true, max: 5  },
+]
 
-const HORAS_DISPONIBLES = Array.from({ length: 13 }, (_, i) => {
-  const h = i + 6
-  return `${String(h).padStart(2, '0')}:00`
-})
+function calcularTotalEquipos(equipos) {
+  return equipos.reduce((sum, e) => sum + (e.cantidad || 1) * e.precioUnitario, 0)
+}
 
-const RE_NIT = /^\d{6,10}-\d{1}$/
 const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const RE_TEL = /^[0-9]{7,15}$/
 
@@ -44,17 +50,32 @@ function getExternalType(tipo) {
 }
 
 const TARIFAS = {
-  'Benjamín Herrera': {
-    escuela_publica:  { 4: 1284000, 6: 1920000 },
-    escuela_privada:  { 4: 1712000, 6: 2560000 },
-    general:          { 4: 2140000, 6: 3200000 },
-  },
-  'Rodrigo Rivera': {
+  'Auditorio Rodrigo Rivera Correa': {
     escuela_publica:  { 4: 2568000, 6: 3840000 },
     escuela_privada:  { 4: 3424000, 6: 5120000 },
     general:          { 4: 4280000, 6: 6400000 },
   },
-  'Sala Auxiliar 1': {
+  'Auditorio Cesar Gaviria Trujillo': {
+    escuela_publica:  { 4: 1926000, 6: 2880000 },
+    escuela_privada:  { 4: 2568000, 6: 3840000 },
+    general:          { 4: 3210000, 6: 4800000 },
+  },
+  'Paraninfo Benjamin Herrera': {
+    escuela_publica:  { 4: 1284000, 6: 1920000 },
+    escuela_privada:  { 4: 1712000, 6: 2560000 },
+    general:          { 4: 2140000, 6: 3200000 },
+  },
+  'Auditorio Rodrigo Rivera Correa (1/4)': {
+    escuela_publica:  { 4: 642000, 6: 960000 },
+    escuela_privada:  { 4: 856000, 6: 1280000 },
+    general:          { 4: 1070000, 6: 1600000 },
+  },
+  'Auditorio Rodrigo Rivera Correa Ppal(1/2)': {
+    escuela_publica:  { 4: 1284000, 6: 1920000 },
+    escuela_privada:  { 4: 1712000, 6: 2560000 },
+    general:          { 4: 2140000, 6: 3200000 },
+  },
+  'Auditorio Auxiliar': {
     escuela_publica:  { 4: 400000, 6: 600000 },
     escuela_privada:  { 4: 600000, 6: 900000 },
     general:          { 4: 800000, 6: 1200000 },
@@ -86,11 +107,8 @@ function validarCampos(f, esPersonaNatural, auditorio) {
   if (!esPersonaNatural) {
     if (!f.nombreEntidad.trim()) errs.nombreEntidad = 'Campo requerido'
     if (!f.tipoEntidad) errs.tipoEntidad = 'Seleccione un tipo'
-    if (!f.nit.trim()) errs.nit = 'Campo requerido'
-    else if (!RE_NIT.test(f.nit)) errs.nit = 'Formato inválido. Ej: 900123456-7'
   }
 
-  if (!f.sede) errs.sede = 'Seleccione una sede'
   if (!f.auditorioId) errs.auditorioId = 'Seleccione un auditorio'
   if (!f.fecha) errs.fecha = 'Campo requerido'
   else {
@@ -112,47 +130,26 @@ function validarCampos(f, esPersonaNatural, auditorio) {
   if (!f.tipoEvento) errs.tipoEvento = 'Seleccione un tipo'
   if (!f.descripcionEvento.trim()) errs.descripcionEvento = 'Campo requerido'
   if (!f.numAsistentes) errs.numAsistentes = 'Campo requerido'
-  else if (auditorio && Number(f.numAsistentes) > auditorio.capacidad) {
-    errs.numAsistentes = `Excede la capacidad del auditorio (${auditorio.capacidad} personas)`
+  else if (auditorio && Number(f.numAsistentes) > auditorio.capacity) {
+    errs.numAsistentes = `Excede la capacidad del auditorio (${auditorio.capacity} personas)`
   }
 
-  return errs
-}
+  const excedidos = f.requiereEquipos.filter(eq => eq.cantidad > (eq.max ?? 999))
+  if (excedidos.length > 0) {
+    errs.equipos = excedidos.map(eq => `${eq.nombre}: máximo ${eq.max}`).join('. ')
+  }
 
-function validarCamposRapidos(f, auditorio) {
-  const errs = {}
-  if (!f.nombreEvento.trim()) errs.nombreEvento = 'Campo requerido'
-  if (!f.sede) errs.sede = 'Seleccione una sede'
-  if (!f.auditorioId) errs.auditorioId = 'Seleccione un auditorio'
-  if (!f.fecha) errs.fecha = 'Campo requerido'
-  else {
-    const d = new Date(f.fecha + 'T00:00:00')
-    const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
-    if (d < hoy) errs.fecha = 'No se permiten fechas pasadas'
-    else if (d.getDay() === 0) errs.fecha = 'No se permiten domingos'
-  }
-  if (!f.horaInicio) errs.horaInicio = 'Seleccione hora de inicio'
-  if (!f.numAsistentes) errs.numAsistentes = 'Campo requerido'
-  else if (auditorio && Number(f.numAsistentes) > auditorio.capacidad) {
-    errs.numAsistentes = 'Excede la capacidad del auditorio'
-  }
-  if (!f.nombreContacto.trim()) errs.nombreContacto = 'Campo requerido'
-  if (!f.correoContacto.trim()) errs.correoContacto = 'Campo requerido'
-  else if (!RE_EMAIL.test(f.correoContacto)) errs.correoContacto = 'Correo inválido'
-  if (!f.telefonoContacto.trim()) errs.telefonoContacto = 'Campo requerido'
-  else if (!RE_TEL.test(f.telefonoContacto)) errs.telefonoContacto = 'Solo números, 7–15 dígitos'
   return errs
 }
 
 const FORM_INICIAL = {
   nombreEntidad: '',
   tipoEntidad: '',
-  nit: '',
+  archivoRut: null,
   nombreContacto: '',
   cargoContacto: '',
   correoContacto: '',
   telefonoContacto: '',
-  sede: '',
   auditorioId: '',
   fecha: '',
   horaInicio: '',
@@ -231,35 +228,41 @@ export default function SolicitudExterna() {
   const [cargandoDia, setCargandoDia] = useState(false)
   const [tarifasAbiertas, setTarifasAbiertas] = useState(false)
   const [confirmacionOpen, setConfirmacionOpen] = useState(false)
+  const [pagoInfoOpen, setPagoInfoOpen] = useState(false)
   const [precioCalculado, setPrecioCalculado] = useState(null)
-  const [modo, setModo] = useState('completo')
-  const [duracion, setDuracion] = useState('4')
+  const [precioEquipos, setPrecioEquipos] = useState(0)
 
   const [auditorios, setAuditorios] = useState([])
   const [auditoriosCargados, setAuditoriosCargados] = useState(false)
+  const [equiposActivos, setEquiposActivos] = useState([])
+  const [equiposCargados, setEquiposCargados] = useState(false)
 
   useEffect(() => {
-    getAuditoriosActivos()
-      .then(({ data }) => { setAuditorios(data); setAuditoriosCargados(true) })
-      .catch(() => { setAuditorios([]); setAuditoriosCargados(true) })
+    Promise.all([
+      getAuditoriosActivos(),
+      getEquiposActivos(),
+    ])
+      .then(([{ data: audData }, { data: eqData }]) => {
+        setAuditorios(audData)
+        setAuditoriosCargados(true)
+        setEquiposActivos(eqData)
+        setEquiposCargados(true)
+      })
+      .catch(() => {
+        setAuditorios([])
+        setAuditoriosCargados(true)
+        setEquiposActivos([])
+        setEquiposCargados(true)
+      })
   }, [])
 
   const esPersonaNatural = form.tipoEntidad === 'Persona natural'
 
-  const locationFilter = form.sede === 'CENTRO' ? 'Sede Centro' : 'Sede Belmonte'
-  const auditoriosFiltrados = form.sede
-    ? auditorios.filter((a) => a.location === locationFilter)
-    : auditorios
-
   const auditorioSeleccionado = auditorios.find((a) => a.id === form.auditorioId)
 
   useEffect(() => {
-    setForm((prev) => ({ ...prev, auditorioId: '', fecha: '', horaInicio: '', horaFin: '' }))
-  }, [form.sede])
-
-  useEffect(() => {
     if (esPersonaNatural) {
-      setForm((prev) => ({ ...prev, nombreEntidad: '', nit: '' }))
+      setForm((prev) => ({ ...prev, nombreEntidad: '', archivoRut: null }))
     }
   }, [esPersonaNatural])
 
@@ -268,12 +271,28 @@ export default function SolicitudExterna() {
     if (errores[campo]) setErrores((prev) => { const n = { ...prev }; delete n[campo]; return n })
   }
 
-  const toggleEquipo = (equipo) => {
+  const toggleEquipo = (item) => {
+    setForm((prev) => {
+      const exists = prev.requiereEquipos.find(e => e.id === item.id)
+      if (exists) {
+        return { ...prev, requiereEquipos: prev.requiereEquipos.filter(e => e.id !== item.id) }
+      }
+      return {
+        ...prev,
+        requiereEquipos: [...prev.requiereEquipos, { id: item.id, nombre: item.nombre, cantidad: 1, max: item.max, precioUnitario: item.precio }]
+      }
+    })
+  }
+
+  const handleCantidad = (itemId, delta) => {
     setForm((prev) => ({
       ...prev,
-      requiereEquipos: prev.requiereEquipos.includes(equipo)
-        ? prev.requiereEquipos.filter((e) => e !== equipo)
-        : [...prev.requiereEquipos, equipo],
+      requiereEquipos: prev.requiereEquipos.map(e => {
+        if (e.id !== itemId) return e
+        const item = EQUIPOS_OPCIONES.find(o => o.id === itemId)
+        const max = item?.max ?? 999
+        return { ...e, cantidad: Math.max(1, Math.min(max, (e.cantidad || 1) + delta)) }
+      })
     }))
   }
 
@@ -310,7 +329,9 @@ export default function SolicitudExterna() {
     const [hF, mF] = form.horaFin.split(':').map(Number)
     const duracion = (hF * 60 + mF - hI * 60 - mI) / 60
     const precio = calcularPrecio(auditorioSeleccionado?.name, form.tipoEntidad, duracion)
+    const equipos = calcularTotalEquipos(form.requiereEquipos)
     setPrecioCalculado(precio)
+    setPrecioEquipos(equipos)
     setConfirmacionOpen(true)
   }
 
@@ -319,16 +340,38 @@ export default function SolicitudExterna() {
     setEnviando(true)
     setErrorRed('')
 
-    const payload = { ...form, auditorioNombre: auditorioSeleccionado?.name }
+    let payload
+    const tieneArchivo = form.archivoRut instanceof File
+
+    if (tieneArchivo) {
+      payload = new FormData()
+      for (const [key, val] of Object.entries(form)) {
+        if (key === 'archivoRut') {
+          payload.append('archivoRut', val)
+        } else if (key !== 'archivoRut') {
+          payload.append(key, typeof val === 'object' ? JSON.stringify(val) : val)
+        }
+      }
+      payload.append('auditorioNombre', auditorioSeleccionado?.name || '')
+    } else {
+      payload = { ...form, auditorioNombre: auditorioSeleccionado?.name }
+      delete payload.archivoRut
+    }
+
     if (esPersonaNatural) {
-      delete payload.nombreEntidad
-      delete payload.nit
+      if (tieneArchivo) {
+        payload.delete('nombreEntidad')
+        payload.delete('tipoEntidad')
+      } else {
+        delete payload.nombreEntidad
+        delete payload.tipoEntidad
+      }
     }
 
     try {
       let idGenerado
       try {
-        const { data } = await crearSolicitudExterna(payload)
+        const { data } = await crearSolicitudExterna(payload, tieneArchivo)
         idGenerado = data.id
       } catch {
         await new Promise((r) => setTimeout(r, 1500))
@@ -342,30 +385,6 @@ export default function SolicitudExterna() {
     } finally {
       setEnviando(false)
     }
-  }
-
-  const handleEnviarRapido = () => {
-    const errs = validarCamposRapidos(form, auditorioSeleccionado)
-    if (!declaracion) errs.declaracion = 'Debe aceptar la declaración'
-    if (Object.keys(errs).length > 0) {
-      setErrores(errs)
-      const primer = document.getElementById(Object.keys(errs)[0])
-      primer?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      return
-    }
-
-    const [hI, mI] = form.horaInicio.split(':').map(Number)
-    const dur = Number(duracion)
-    const totalMin = hI * 60 + mI + dur * 60
-    const hF = Math.floor(totalMin / 60)
-    const mF = totalMin % 60
-    const horaFin = `${String(hF).padStart(2, '0')}:${String(mF).padStart(2, '0')}`
-
-    setForm(prev => ({ ...prev, horaFin, tipoEntidad: 'Otro' }))
-
-    const precio = calcularPrecio(auditorioSeleccionado?.name, 'Otro', dur)
-    setPrecioCalculado(precio)
-    setConfirmacionOpen(true)
   }
 
   const todosValidos =
@@ -422,68 +441,32 @@ export default function SolicitudExterna() {
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-[#111111]">Solicitud de reserva de auditorio</h1>
             <p className="text-gray-500 text-sm mt-1">
-              {modo === 'completo'
-                ? 'Complete el formulario para solicitar la reserva de un espacio. Todos los campos marcados son obligatorios.'
-                : 'Complete solo los campos esenciales para una solicitud rápida.'}
+              Complete el formulario para solicitar la reserva de un espacio. Todos los campos marcados son obligatorios.
             </p>
           </div>
-
-          {/* Toggle modo */}
-          <div className="flex bg-gray-100 rounded-lg p-1 mb-6">
-            <button
-              onClick={() => setModo('completo')}
-              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition ${
-                modo === 'completo' ? 'bg-white shadow-sm text-[#C8171E]' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Formulario completo
-            </button>
-            <button
-              onClick={() => setModo('rapido')}
-              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition ${
-                modo === 'rapido' ? 'bg-white shadow-sm text-[#C8171E]' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Solicitud rápida
-            </button>
-          </div>
-
-          {modo === 'completo' ? (
           <div className="space-y-6">
           <section className="bg-white rounded-xl shadow-sm p-6">
             <SeccionTitulo icon={Calendar} titulo="Datos del evento" />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Campo id="sede" label="Sede" error={errores.sede}>
-                <Select id="sede" value={form.sede} onChange={set('sede')} error={errores.sede}>
-                  <option value="">Seleccione...</option>
-                  {SEDES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </Select>
-              </Campo>
-
-              <Campo id="auditorioId" label="Auditorio" error={errores.auditorioId}>
-                <Select
-                  id="auditorioId"
-                  value={form.auditorioId}
-                  onChange={set('auditorioId')}
-                  error={errores.auditorioId}
-                  disabled={!form.sede}
-                >
-                  <option value="">
-                    {form.sede ? 'Seleccione auditorio...' : 'Primero seleccione sede'}
-                  </option>
-                  {auditoriosFiltrados.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name} (cap. {a.capacity})
-                    </option>
-                  ))}
-                  {form.sede && auditoriosFiltrados.length === 0 && (
-                    <option disabled>Sin auditorios disponibles</option>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-700 mb-2">
+                    Seleccione el auditorio
+                  </label>
+                  {auditoriosCargados ? (
+                    <SelectorAuditorio
+                      auditorios={auditorios}
+                      auditorioId={form.auditorioId}
+                      onSelect={(a) => {
+                        setForm((prev) => ({ ...prev, auditorioId: a.id, fecha: '', horaInicio: '', horaFin: '' }))
+                        if (errores.auditorioId) setErrores((p) => { const n = { ...p }; delete n.auditorioId; return n })
+                      }}
+                      error={errores.auditorioId}
+                    />
+                  ) : (
+                    <p className="text-gray-500 text-sm">Cargando auditorios...</p>
                   )}
-                </Select>
-              </Campo>
+                </div>
 
               {/* Timeline — se muestra al seleccionar auditorio */}
               {form.auditorioId && (
@@ -659,22 +642,97 @@ export default function SolicitudExterna() {
                     Equipos requeridos{' '}
                     <span className="text-gray-400 font-normal">(opcional)</span>
                   </legend>
-                  <div className="flex flex-wrap gap-3">
-                    {EQUIPOS_OPCIONES.map((eq) => (
-                      <label
-                        key={eq}
-                        className="flex items-center gap-2 text-sm cursor-pointer select-none"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={form.requiereEquipos.includes(eq)}
-                          onChange={() => toggleEquipo(eq)}
-                          className="w-4 h-4 accent-[#C8171E]"
-                        />
-                        {eq}
-                      </label>
-                    ))}
-                  </div>
+                  {!equiposCargados ? (
+                    <p className="text-sm text-gray-400 py-2">Cargando equipos disponibles...</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {EQUIPOS_OPCIONES.filter(item => equiposActivos.some(eq => eq.name === item.nombre)).length === 0 ? (
+                        <p className="text-sm text-gray-400 py-2">No hay equipos disponibles en este momento</p>
+                      ) : (
+                        EQUIPOS_OPCIONES.filter(item => equiposActivos.some(eq => eq.name === item.nombre)).map((item) => {
+                          const selec = form.requiereEquipos.find(e => e.id === item.id)
+                          const cant = selec?.cantidad || 1
+                          const subtotal = selec ? cant * item.precio : 0
+                          return (
+                            <div key={item.id} className={`border rounded-lg p-3 transition ${selec ? 'border-[#C8171E]/40 bg-[#C8171E]/5' : 'border-[#E0E0E0]'}`}>
+                              <div className="flex items-center justify-between gap-2">
+                                <label className="flex items-center gap-2 text-sm cursor-pointer select-none min-w-0 flex-1">
+                                  <input
+                                    type="checkbox"
+                                    checked={!!selec}
+                                    onChange={() => toggleEquipo(item)}
+                                    className="w-4 h-4 accent-[#C8171E] flex-shrink-0"
+                                  />
+                                  <span className="font-medium text-gray-700 truncate">{item.nombre}</span>
+                                </label>
+                                <span className="text-sm text-gray-500 whitespace-nowrap flex-shrink-0">
+                                  {formatearPrecio(item.precio)}{item.porUnidad ? ' c/u' : ''}
+                                </span>
+                              </div>
+                              {selec && (
+                                <div className="flex items-center justify-between mt-2 pl-6">
+                                  <div className="flex items-center gap-1.5">
+                                    {item.porUnidad ? (
+                                      <>
+                                        <span className="text-xs text-gray-500">Cant:</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCantidad(item.id, -1)}
+                                          disabled={cant <= 1}
+                                          className="w-6 h-6 rounded border border-[#E0E0E0] flex items-center justify-center text-sm font-medium text-gray-600 hover:border-gray-400 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                                        >
+                                          –
+                                        </button>
+                                        <span className="w-7 text-center text-sm font-medium text-gray-800">{cant}</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCantidad(item.id, 1)}
+                                          disabled={cant >= item.max}
+                                          className="w-6 h-6 rounded border border-[#E0E0E0] flex items-center justify-center text-sm font-medium text-gray-600 hover:border-gray-400 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                                        >
+                                          +
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <span className="text-xs text-gray-400">(único)</span>
+                                    )}
+                                  </div>
+                                  <span className="text-sm font-semibold text-gray-800">
+                                    = {formatearPrecio(subtotal)}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })
+                      )}
+                    </div>
+                  )}
+
+                  {errores.equipos && (
+                    <p className="text-xs text-[#C8171E] bg-red-50 rounded-lg px-3 py-2 mt-3 flex items-start gap-1.5">
+                      <AlertCircle size={13} className="mt-0.5 flex-shrink-0" />
+                      {errores.equipos}
+                    </p>
+                  )}
+
+                  {form.requiereEquipos.length > 0 && (
+                    <div className="flex justify-end items-center gap-2 mt-3 pt-3 border-t border-[#E0E0E0]">
+                      <span className="text-sm text-gray-600">Total equipos:</span>
+                      <span className="text-base font-bold text-[#111111]">
+                        {formatearPrecio(calcularTotalEquipos(form.requiereEquipos))}
+                      </span>
+                    </div>
+                  )}
+
+                  <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2 mt-3 flex items-start gap-1.5">
+                    <AlertCircle size={13} className="mt-0.5 flex-shrink-0" />
+                    Las sillas y mesas adicionales no podrán ser usadas dentro de los auditorios/salas.
+                  </p>
+                  <p className="text-xs text-blue-600 bg-blue-50 rounded-lg px-3 py-2 mt-2 flex items-start gap-1.5">
+                    <Info size={13} className="mt-0.5 flex-shrink-0" />
+                    Por defecto se proporcionarán 2 micrófonos inalámbricos para el evento.
+                  </p>
                 </fieldset>
               </div>
             </div>
@@ -712,15 +770,41 @@ export default function SolicitudExterna() {
               )}
 
               {!esPersonaNatural && (
-                <Campo id="nit" label="NIT / RUT" error={errores.nit}>
-                  <Input
-                    id="nit"
-                    type="text"
-                    value={form.nit}
-                    onChange={set('nit')}
-                    error={errores.nit}
-                    placeholder="900123456-7"
-                  />
+                <Campo id="archivoRut" label="Documento RUT (PDF)" error={errores.archivoRut}>
+                  <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-2 px-3 py-2 border border-[#E0E0E0] rounded-lg cursor-pointer hover:border-[#C8171E] transition text-sm text-gray-600 hover:text-[#C8171E]">
+                      <FileUp size={16} />
+                      {form.archivoRut ? form.archivoRut.name : 'Seleccionar archivo'}
+                      <input
+                        type="file"
+                        accept=".pdf"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files[0]
+                          if (file && file.type !== 'application/pdf') {
+                            setErrores(p => ({ ...p, archivoRut: 'Solo se aceptan archivos PDF' }))
+                            return
+                          }
+                          setForm(p => ({ ...p, archivoRut: file || null }))
+                          if (errores.archivoRut) setErrores(p => { const n = { ...p }; delete n.archivoRut; return n })
+                        }}
+                      />
+                    </label>
+                    {form.archivoRut && (
+                      <button
+                        type="button"
+                        onClick={() => setForm(p => ({ ...p, archivoRut: null }))}
+                        className="text-xs text-gray-400 hover:text-[#C8171E]"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                  {form.archivoRut && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      {(form.archivoRut.size / 1024).toFixed(1)} KB
+                    </p>
+                  )}
                 </Campo>
               )}
 
@@ -794,6 +878,15 @@ export default function SolicitudExterna() {
               </p>
             )}
 
+            <button
+              type="button"
+              onClick={() => setPagoInfoOpen(true)}
+              className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold border border-[#C8A84B]/40 text-[#C8A84B] hover:bg-[#C8A84B]/5 transition"
+            >
+              <CreditCard size={16} />
+              Información de pago
+            </button>
+
             {errorRed && (
               <div className="mt-4 flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
                 <AlertCircle size={15} /> {errorRed}
@@ -824,93 +917,6 @@ export default function SolicitudExterna() {
             </p>
           </section>
         </div>
-        ) : (
-          <div className="space-y-6">
-            <section className="bg-white rounded-xl shadow-sm p-6">
-              <SeccionTitulo icon={Zap} titulo="Datos esenciales" />
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Campo id="q-nombreEvento" label="Nombre del evento" error={errores.nombreEvento}>
-                  <Input id="q-nombreEvento" type="text" value={form.nombreEvento} onChange={set('nombreEvento')} error={errores.nombreEvento} placeholder="Nombre del evento" />
-                </Campo>
-
-                <Campo id="q-sede" label="Sede" error={errores.sede}>
-                  <Select id="q-sede" value={form.sede} onChange={set('sede')} error={errores.sede}>
-                    <option value="">Seleccione...</option>
-                    {SEDES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </Select>
-                </Campo>
-
-                <Campo id="q-auditorioId" label="Auditorio" error={errores.auditorioId}>
-                  <Select id="q-auditorioId" value={form.auditorioId} onChange={set('auditorioId')} error={errores.auditorioId} disabled={!form.sede}>
-                    <option value="">{form.sede ? 'Seleccione...' : 'Primero seleccione sede'}</option>
-                    {auditoriosFiltrados.map(a => (
-                      <option key={a.id} value={a.id}>{a.name} (cap. {a.capacity})</option>
-                    ))}
-                  </Select>
-                </Campo>
-
-                <Campo id="q-fecha" label="Fecha" error={errores.fecha}>
-                  <Input id="q-fecha" type="date" value={form.fecha} onChange={(e) => { set('fecha')(e); setForm(p => ({ ...p, horaInicio: '' })) }} min={new Date().toISOString().split('T')[0]} error={errores.fecha} />
-                </Campo>
-
-                <Campo id="q-horaInicio" label="Hora de inicio" error={errores.horaInicio}>
-                  <Select id="q-horaInicio" value={form.horaInicio} onChange={set('horaInicio')} error={errores.horaInicio}>
-                    <option value="">Seleccione...</option>
-                    {HORAS_DISPONIBLES.map(h => <option key={h} value={h}>{h}</option>)}
-                  </Select>
-                </Campo>
-
-                <Campo id="q-duracion" label="Duración" error={errores.duracion}>
-                  <Select id="q-duracion" value={duracion} onChange={(e) => setDuracion(e.target.value)}>
-                    <option value="4">4 horas</option>
-                    <option value="6">6 horas</option>
-                  </Select>
-                  {form.horaInicio && (() => {
-                    const [hI, mI] = form.horaInicio.split(':').map(Number)
-                    const totalMin = hI * 60 + mI + Number(duracion) * 60
-                    const hF2 = Math.floor(totalMin / 60)
-                    const mF2 = totalMin % 60
-                    return <p className="text-xs text-gray-400 mt-0.5">Termina a las {String(hF2).padStart(2, '0')}:{String(mF2).padStart(2, '0')}</p>
-                  })()}
-                </Campo>
-
-                <Campo id="q-numAsistentes" label="N° asistentes" error={errores.numAsistentes}>
-                  <Input id="q-numAsistentes" type="number" min={1} value={form.numAsistentes} onChange={set('numAsistentes')} error={errores.numAsistentes} placeholder="Ej: 50" />
-                  {auditorioSeleccionado && <p className="text-xs text-gray-400 mt-0.5">Capacidad: {auditorioSeleccionado.capacity} personas</p>}
-                </Campo>
-
-                <Campo id="q-nombreContacto" label="Nombre del responsable" error={errores.nombreContacto}>
-                  <Input id="q-nombreContacto" type="text" value={form.nombreContacto} onChange={set('nombreContacto')} error={errores.nombreContacto} placeholder="Nombre completo" />
-                </Campo>
-
-                <Campo id="q-correoContacto" label="Correo electrónico" error={errores.correoContacto}>
-                  <Input id="q-correoContacto" type="email" value={form.correoContacto} onChange={set('correoContacto')} error={errores.correoContacto} placeholder="correo@institucion.com" />
-                </Campo>
-
-                <Campo id="q-telefonoContacto" label="Teléfono" error={errores.telefonoContacto}>
-                  <Input id="q-telefonoContacto" type="tel" value={form.telefonoContacto} onChange={set('telefonoContacto')} error={errores.telefonoContacto} placeholder="3001234567" />
-                </Campo>
-              </div>
-            </section>
-
-            <section className="bg-white rounded-xl shadow-sm p-6">
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input type="checkbox" id="q-declaracion" checked={declaracion} onChange={(e) => { setDeclaracion(e.target.checked); if (errores.declaracion) setErrores(p => { const n = { ...p }; delete n.declaracion; return n }) }} className="mt-0.5 w-4 h-4 accent-[#C8171E] flex-shrink-0" />
-                <span className="text-sm text-gray-700 leading-relaxed">
-                  Declaro que la información proporcionada es veraz y que la entidad que represento asume la responsabilidad del uso del espacio y el pago de las tarifas establecidas por la <strong>Universidad Libre Seccional Pereira</strong>.
-                </span>
-              </label>
-              {errores.declaracion && <p className="flex items-center gap-1 text-xs text-[#C8171E] mt-2"><AlertCircle size={12} /> {errores.declaracion}</p>}
-
-              {errorRed && <div className="mt-4 flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700"><AlertCircle size={15} /> {errorRed}</div>}
-
-              <button onClick={handleEnviarRapido} disabled={enviando} className="mt-5 w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition disabled:opacity-60 disabled:cursor-not-allowed bg-[#C8171E] hover:bg-[#a01016] text-white">
-                {enviando ? <><Loader2 size={16} className="animate-spin" /> Enviando solicitud...</> : 'Enviar solicitud rápida'}
-              </button>
-              <p className="text-xs text-gray-400 text-center mt-3">Recibirá respuesta en un plazo de 2 días hábiles al correo indicado.</p>
-            </section>
-          </div>
-        )}
       </main>
 
       {/* Modal de tarifas */}
@@ -971,11 +977,26 @@ export default function SolicitudExterna() {
             <h3 className="text-lg font-bold text-[#111111] mb-2">Confirmar solicitud</h3>
             <p className="text-sm text-gray-500 mb-4">
               {precioCalculado != null
-                ? `El valor estimado de esta reserva es:`
+                ? 'El valor estimado de esta reserva es:'
                 : 'No se pudo calcular el valor de la reserva.'}
             </p>
             {precioCalculado != null && (
-              <p className="text-2xl font-bold text-[#111111] mb-4">{formatearPrecio(precioCalculado)}</p>
+              <div className="text-left space-y-1.5 mb-4">
+                <p className="text-sm text-gray-500 flex justify-between">
+                  <span>Tarifa del auditorio</span>
+                  <span>{formatearPrecio(precioCalculado)}</span>
+                </p>
+                {precioEquipos > 0 && (
+                  <p className="text-sm text-gray-500 flex justify-between">
+                    <span>Equipos adicionales</span>
+                    <span>{formatearPrecio(precioEquipos)}</span>
+                  </p>
+                )}
+                <div className="border-t border-gray-200 pt-1.5 flex justify-between items-baseline">
+                  <span className="text-sm font-semibold text-gray-700">Total</span>
+                  <span className="text-2xl font-bold text-[#111111]">{formatearPrecio(precioCalculado + (precioEquipos || 0))}</span>
+                </div>
+              </div>
             )}
             <div className="flex gap-3">
               <button
@@ -991,6 +1012,43 @@ export default function SolicitudExterna() {
                 Confirmar y enviar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de información de pago */}
+      {pagoInfoOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-[#111111] mb-4 flex items-center gap-2">
+              <CreditCard size={20} className="text-[#C8171E]" />
+              Información de pago
+            </h3>
+            <div className="space-y-4 text-sm text-gray-600 leading-relaxed">
+              <p>
+                Una vez creada la solicitud, en un plazo máximo de <strong>2 días hábiles</strong> nos
+                contactaremos contigo para realizar la <strong>primera factura</strong> correspondiente
+                al <strong>50% del valor total</strong> de la reserva.
+              </p>
+              <p>
+                Tendrás <strong>7 días calendario</strong> para realizar el pago de esta primera factura.
+                Una vez confirmado el pago, se confirmará la reserva del espacio seleccionado.
+              </p>
+              <p>
+                La <strong>segunda factura</strong> con el <strong>50% restante</strong> deberá ser
+                pagada máximo <strong>3 días antes de la fecha del evento</strong>.
+              </p>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
+                <strong>Nota:</strong> El incumplimiento de los plazos de pago podrá resultar en la
+                cancelación automática de la reserva.
+              </div>
+            </div>
+            <button
+              onClick={() => setPagoInfoOpen(false)}
+              className="w-full mt-5 py-2.5 rounded-xl text-sm font-semibold bg-[#C8171E] hover:bg-[#a01016] text-white transition"
+            >
+              Cerrar
+            </button>
           </div>
         </div>
       )}

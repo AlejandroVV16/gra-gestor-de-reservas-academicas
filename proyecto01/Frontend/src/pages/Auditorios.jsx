@@ -17,22 +17,38 @@ export default function Auditorios() {
 
   const handleGuardar = async (data) => {
     try {
-      if (data.id) {
-        await editarAuditorio(data.id, {
+      const tieneArchivo = data.archivo instanceof File
+      let payload
+
+      if (tieneArchivo) {
+        payload = new FormData()
+        payload.append('name', data.nombre)
+        payload.append('location', data.sede)
+        payload.append('capacity', String(data.capacidad))
+        payload.append('description', data.descripcion || '')
+        payload.append('image', data.archivo)
+        if (data.id) {
+          payload.append('is_active', data.estado === 'ACTIVO' ? 'true' : 'false')
+        }
+      } else {
+        payload = {
           name: data.nombre,
           location: data.sede,
           capacity: data.capacidad,
           description: data.descripcion,
-          is_active: data.estado === 'ACTIVO',
-        })
+        }
+        if (data.id) {
+          payload.is_active = data.estado === 'ACTIVO'
+          const imgVal = data.imagenActual || null
+          payload.image = data.imagenEliminada ? null : (imgVal && imgVal !== '{}' ? imgVal : null)
+        }
+      }
+
+      if (data.id) {
+        await editarAuditorio(data.id, payload)
         addToast({ tipo: 'exito', mensaje: 'Auditorio actualizado correctamente' })
       } else {
-        await crearAuditorio({
-          name: data.nombre,
-          location: data.sede,
-          capacity: data.capacidad,
-          description: data.descripcion,
-        })
+        await crearAuditorio(payload)
         addToast({ tipo: 'exito', mensaje: 'Auditorio creado correctamente' })
       }
       recargar()

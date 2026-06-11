@@ -8,6 +8,7 @@ import NuevaReserva from '../pages/NuevaReserva'
 import EditarReserva from '../pages/EditarReserva'
 import Calendario from '../pages/Calendario'
 import Auditorios from '../pages/Auditorios'
+import Equipos from '../pages/Equipos'
 import Personal from '../pages/Personal'
 import Historial from '../pages/Historial'
 import Homepage from '../pages/Homepage'
@@ -54,6 +55,11 @@ export default function AppRouter() {
           <Route path="/auditorios" element={
             <ProtectedRoute soloAdmin>
               <Auditorios />
+            </ProtectedRoute>
+          } />
+          <Route path="/equipos" element={
+            <ProtectedRoute soloAdmin>
+              <Equipos />
             </ProtectedRoute>
           } />
           <Route path="/personal" element={

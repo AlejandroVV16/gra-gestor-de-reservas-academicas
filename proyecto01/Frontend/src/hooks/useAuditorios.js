@@ -13,6 +13,7 @@ function mapAuditorio(a) {
     sede: SEDE_MAP[a.location] || a.location,
     capacidad: a.capacity,
     descripcion: a.description || '',
+    image: (a.image && a.image !== '{}') ? a.image : null,
     estado: a.is_active ? 'ACTIVO' : 'INACTIVO',
     equipamiento: [],
   }

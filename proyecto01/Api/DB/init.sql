@@ -36,6 +36,7 @@ CREATE TABLE auditoriums (
     location        VARCHAR(200)    NOT NULL,
     capacity        INT             NOT NULL CHECK (capacity > 0),
     description     TEXT,
+    image           VARCHAR(255),
     is_active       BOOLEAN         NOT NULL DEFAULT TRUE,
     created_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW()
@@ -120,6 +121,19 @@ CREATE TABLE payments (
 );
 
 -- =============================================================
+--  TABLA: equipments
+-- =============================================================
+CREATE TABLE equipments (
+    id              UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+    name            VARCHAR(100)    NOT NULL UNIQUE,
+    quantity        INT             NOT NULL DEFAULT 0 CHECK (quantity >= 0),
+    description     TEXT,
+    is_active       BOOLEAN         NOT NULL DEFAULT TRUE,
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+);
+
+-- =============================================================
 --  TRIGGERS
 -- =============================================================
 CREATE OR REPLACE FUNCTION set_updated_at()
@@ -142,16 +156,20 @@ CREATE TRIGGER trg_reservations_updated_at
     BEFORE UPDATE ON reservations
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+CREATE TRIGGER trg_equipments_updated_at
+    BEFORE UPDATE ON equipments
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
 -- =============================================================
 --  SEED
 -- =============================================================
-INSERT INTO auditoriums (name, location, capacity, description, is_active) VALUES
-    ('Auditorio Rodrigo Rivera Correa',          'Sede Belmonte', 600, 'Auditorio principal con escenario, seis pantallas y ayudas audiovisuales.', TRUE),
-    ('Auditorio Cesar Gaviria Trujillo',          'Sede Centro',   337, 'Sala equipada con proyector y videoconferencia', TRUE),
-    ('Paraninfo Benjamin Herrera',               'Sede Belmonte', 230, 'Espacio flexible para talleres y reuniones', TRUE),
-    ('Auditorio Rodrigo Rivera Correa (1/4)',     'Sede Belmonte', 120, 'Espacio flexible para talleres y reuniones', TRUE),
-    ('Auditorio Rodrigo Rivera Correa Ppal(1/2)','Sede Belmonte', 250, 'Espacio flexible para talleres y reuniones', TRUE),
-    ('Auditorio Auxiliar',                       'Sede Belmonte',  89, 'Espacio flexible para talleres y reuniones', TRUE);
+INSERT INTO auditoriums (name, location, capacity, description, image, is_active) VALUES
+    ('Auditorio Rodrigo Rivera Correa',           'Sede Belmonte', 600, 'Auditorio principal con escenario, seis pantallas y ayudas audiovisuales.', 'auditorio-rodrigo-rivera-correa.webp', TRUE),
+    ('Auditorio Cesar Gaviria Trujillo',          'Sede Centro',   337, 'Sala equipada con proyector y videoconferencia',               'auditorio-cesar-gaviria-trujillo.webp', TRUE),
+    ('Paraninfo Benjamin Herrera',               'Sede Belmonte', 230, 'Espacio flexible para talleres y reuniones',                    'paraninfo-benjamin-herrera.webp', TRUE),
+    ('Auditorio Rodrigo Rivera Correa (1/4)',     'Sede Belmonte', 120, 'Espacio flexible para talleres y reuniones',                    'auditorio-rodrigo-rivera-correa-1-4.webp', TRUE),
+    ('Auditorio Rodrigo Rivera Correa Ppal(1/2)','Sede Belmonte', 250, 'Espacio flexible para talleres y reuniones',                    'auditorio-rodrigo-rivera-correa-ppal-1-2.webp', TRUE),
+    ('Auditorio Auxiliar',                       'Sede Belmonte',  89, 'Espacio flexible para talleres y reuniones',                    'auditorio-auxiliar.webp', TRUE);
 
 
 INSERT INTO tariffs (auditorium_id, external_type, hours, price)
@@ -203,3 +221,15 @@ INSERT INTO users (user_type, full_name, email, correo, password_hash, is_active
     ('interno', 'Johns Betancur', 'johns', 'johns@unilibre.edu.co', crypt('1234', gen_salt('bf', 10)), TRUE),
     ('interno', 'Alex Bedoya', 'alex', 'alex@unilibre.edu.co', crypt('1234', gen_salt('bf', 10)), TRUE),
     ('interno', 'Diana Henao', 'diana', 'diana@unilibre.edu.co', crypt('1234', gen_salt('bf', 10)), FALSE);
+
+-- =============================================================
+--  SEED: equipments
+-- =============================================================
+INSERT INTO equipments (name, quantity, description) VALUES
+    ('Mesas en fórmica',  0, 'Mesas plegables de fórmica para eventos'),
+    ('Mesas Rimax',       0, 'Mesas Rimax redondas'),
+    ('Sillas Rimax',      0, 'Sillas Rimax apilables'),
+    ('Otras sillas',      0, 'Sillas adicionales para eventos'),
+    ('Micrófonos',        0, 'Micrófonos inalámbricos'),
+    ('Manteles',          0, 'Manteles para mesas'),
+    ('Sobre manteles',    0, 'Sobre manteles decorativos');

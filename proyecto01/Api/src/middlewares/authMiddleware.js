@@ -16,4 +16,10 @@ const verifyToken = (req, res, next) => {
     }
 };
 
-module.exports = { verifyToken };
+const requireAdmin = (req, res, next) => {
+    if (req.user?.user_type !== 'admin')
+        return res.status(403).json({ error: 'Acción permitida solo para administradores' });
+    next();
+};
+
+module.exports = { verifyToken, requireAdmin };

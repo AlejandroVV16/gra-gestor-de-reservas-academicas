@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, CalendarDays, BookOpen, Building2,
-  Users, History, BarChart2, X, ExternalLink,
+  Users, History, BarChart2, X, ExternalLink, Package,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import escudo from '../../resources/escudo-unilibre.png.png'
@@ -11,6 +11,7 @@ const NAV_ADMIN = [
   { to: '/reservas',   label: 'Reservas',       icon: BookOpen        },
   { to: '/calendario', label: 'Calendario',     icon: CalendarDays    },
   { to: '/auditorios', label: 'Auditorios',     icon: Building2       },
+  { to: '/equipos',    label: 'Equipos',        icon: Package         },
   { to: '/personal',   label: 'Personal',       icon: Users           },
   { to: '/historial',  label: 'Historial',      icon: History         },
   { to: '/reportes',              label: 'Reportes',          icon: BarChart2    },

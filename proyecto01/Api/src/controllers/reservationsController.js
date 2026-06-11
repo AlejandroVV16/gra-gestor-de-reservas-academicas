@@ -1,33 +1,14 @@
 const pool = require('../../DB/db');
 
-// ── Helper: resolver ID numérico (frontend mock) a UUID de la BD ───────
-const AUDITORIUM_NAME_MAP = {
-  1: 'Benjamín Herrera',
-  2: 'Rodrigo Rivera',
-  3: 'Sala Auxiliar 1',
-  4: 'Sala de Sistemas 1',
-};
-
+// ── Helper: validar/ resolver ID de auditorio ──────────────────────────
 async function resolveAuditoriumId(param) {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (uuidRegex.test(param)) return param;
-
-  const nombre = AUDITORIUM_NAME_MAP[param];
-  if (nombre) {
-    const palabras = nombre.split(/\s+/).filter(w => w.length > 2).slice(0, 2);
-    const pattern = '%' + palabras.join('%') + '%';
-    const result = await pool.query(
-      'SELECT id FROM auditoriums WHERE name ILIKE $1 LIMIT 1',
-      [pattern]
+  if (!uuidRegex.test(param)) {
+    const fallback = await pool.query(
+      'SELECT id FROM auditoriums WHERE is_active = TRUE LIMIT 1'
     );
-    if (result.rows.length > 0) return result.rows[0].id;
+    return fallback.rows.length > 0 ? fallback.rows[0].id : param;
   }
-
-  const fallback = await pool.query(
-    'SELECT id FROM auditoriums WHERE is_active = TRUE LIMIT 1'
-  );
-  if (fallback.rows.length > 0) return fallback.rows[0].id;
-
   return param;
 }
 
@@ -176,7 +157,12 @@ const createReservation = async (req, res) => {
     const attendeesCount = b.attendees_count || b.personas;
     const responsible    = b.responsible_person || b.encargado;
     const applicantName  = b.applicant_name || req.user?.full_name || req.user?.email;
-    const applicantPhone = b.applicant_phone || '';
+    const applicantPhone = b.applicant_phone || b.telefonoContacto || '';
+    const applicantEmail = b.applicant_email || b.correoContacto || req.user?.email || '';
+    const eventType      = b.event_type || b.tipoEvento || null;
+    const description    = b.description || b.descripcion || null;
+    const equipos        = b.requiereEquipos || b.equipos || null;
+    const facultad       = b.facultad || null;
     let eventStart = b.event_start;
     let eventEnd   = b.event_end;
 
@@ -267,13 +253,24 @@ const createReservation = async (req, res) => {
             return res.status(409).json({ error: 'El horario solicitado se cruza con una reserva existente' });
         }
 
-        // 8. Crear la reserva
+        // 8. Construir notas con datos adicionales
+        const notasPartes = [];
+        if (description) notasPartes.push(`Descripción: ${description}`);
+        if (eventType) notasPartes.push(`Tipo: ${eventType}`);
+        if (facultad) notasPartes.push(`Facultad: ${facultad}`);
+        if (equipos) {
+            const equiposStr = typeof equipos === 'string' ? equipos : JSON.stringify(equipos);
+            notasPartes.push(`Equipos: ${equiposStr}`);
+        }
+        const notasFinal = notasPartes.length > 0 ? notasPartes.join(' | ') : (b.notes || null);
+
+        // 9. Crear la reserva (aprobada automaticamente)
         const result = await pool.query(`
             INSERT INTO reservations (
                 user_id, auditorium_id, event_name, attendees_count,
                 responsible_person, applicant_name, applicant_phone,
-                event_start, event_end
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                applicant_email, event_start, event_end, notes, status
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'aprobada')
             RETURNING *
         `, [
             userId,
@@ -283,8 +280,10 @@ const createReservation = async (req, res) => {
             responsible,
             applicantName,
             applicantPhone,
+            applicantEmail,
             start,
-            end
+            end,
+            notasFinal
         ]);
 
         await addHistory(result.rows[0].id, 'CREADA', req.user.full_name || req.user.email, `Reserva creada para "${eventName}" en el auditorio`);

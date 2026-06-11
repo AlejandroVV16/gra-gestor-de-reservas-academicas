@@ -202,7 +202,6 @@ export default function Login() {
           <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-[#E0E0E0]">
             <p className="text-xs text-gray-500 font-medium mb-1">Demo (prototipo):</p>
             <p className="text-xs text-gray-400">Admin: <span className="font-mono font-semibold text-gray-600">lindelia / 1234</span></p>
-            <p className="text-xs text-gray-400">TI: <span className="font-mono font-semibold text-gray-600">johns / 1234</span></p>
           </div>
         </div>
 

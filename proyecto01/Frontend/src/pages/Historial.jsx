@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Download, Search, Loader2, Trash2 } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Download, Search, Loader2, Trash2, RotateCcw } from 'lucide-react'
 import AccionBadge from '../components/ui/AccionBadge'
 import { getHistorial, limpiarHistorial } from '../api/historialApi'
 import { getAuditorios } from '../api/auditoriosApi'
@@ -8,12 +8,13 @@ import { es } from 'date-fns/locale'
 
 const TIPOS_ACCION = ['CREADA', 'EDITADA', 'CANCELADA', 'CONFLICTO_RESUELTO', 'APROBADA', 'PAGADA_FASE2']
 
+const FILTROS_INICIALES = {
+  fechaInicio: '', fechaFin: '', usuario: '', tipoAccion: '', auditorio: '',
+}
+
 export default function Historial() {
-  const [filtros, setFiltros] = useState({
-    fechaInicio: '', fechaFin: '', usuario: '', tipoAccion: '', auditorio: '',
-  })
+  const [filtros, setFiltros] = useState({ ...FILTROS_INICIALES })
   const [registros, setRegistros] = useState([])
-  const [todos, setTodos] = useState([])
   const [cargando, setCargando] = useState(true)
   const [auditorios, setAuditorios] = useState([])
 
@@ -23,34 +24,35 @@ export default function Historial() {
       .catch(() => setAuditorios([]))
   }, [])
 
-  useEffect(() => {
+  const cargarHistorial = useCallback((params = {}) => {
     setCargando(true)
-    getHistorial()
-      .then(({ data }) => {
-        setTodos(data)
-        setRegistros(data)
-      })
-      .catch(() => {
-        setTodos([])
-        setRegistros([])
-      })
+    getHistorial(params)
+      .then(({ data }) => setRegistros(data))
+      .catch(() => setRegistros([]))
       .finally(() => setCargando(false))
   }, [])
+
+  useEffect(() => {
+    cargarHistorial()
+  }, [cargarHistorial])
 
   const handleChange = (e) => {
     setFiltros((p) => ({ ...p, [e.target.name]: e.target.value }))
   }
 
   const handleBuscar = () => {
-    const filtrados = todos.filter((h) => {
-      if (filtros.fechaInicio && h.fechaHora < filtros.fechaInicio) return false
-      if (filtros.fechaFin    && h.fechaHora > filtros.fechaFin + 'T23:59') return false
-      if (filtros.usuario && !h.usuario?.toLowerCase().includes(filtros.usuario.toLowerCase())) return false
-      if (filtros.tipoAccion && h.tipoAccion !== filtros.tipoAccion) return false
-      if (filtros.auditorio  && !h.auditorio?.includes(filtros.auditorio)) return false
-      return true
-    })
-    setRegistros(filtrados)
+    const params = {}
+    if (filtros.fechaInicio) params.fechaInicio = filtros.fechaInicio
+    if (filtros.fechaFin)    params.fechaFin    = filtros.fechaFin
+    if (filtros.usuario)     params.usuario     = filtros.usuario
+    if (filtros.tipoAccion)  params.accion      = filtros.tipoAccion
+    if (filtros.auditorio)   params.auditorio   = filtros.auditorio
+    cargarHistorial(params)
+  }
+
+  const handleResetFiltros = () => {
+    setFiltros({ ...FILTROS_INICIALES })
+    cargarHistorial()
   }
 
   const handleLimpiar = () => {
@@ -58,7 +60,6 @@ export default function Historial() {
     setCargando(true)
     limpiarHistorial()
       .then(({ data }) => {
-        setTodos([])
         setRegistros([])
         alert(data.message)
       })
@@ -135,6 +136,9 @@ export default function Historial() {
           </div>
           <button className="btn-primary" onClick={handleBuscar}>
             <Search size={16} /> Buscar
+          </button>
+          <button className="btn-secondary" onClick={handleResetFiltros}>
+            <RotateCcw size={16} /> Limpiar filtros
           </button>
         </div>
       </div>

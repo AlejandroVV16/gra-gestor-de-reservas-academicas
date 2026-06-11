@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Save } from 'lucide-react'
+import { X, Save, Upload, Trash2 } from 'lucide-react'
 
 const EQUIPOS_DISPONIBLES = ['Proyector', 'Micrófono', 'Cámaras', 'Televisor', 'Puntero láser', 'Tablero digital']
 
@@ -11,6 +11,9 @@ const FORM_VACIO = {
 export default function AuditorioModal({ auditorio, onClose, onGuardar }) {
   const [form, setForm] = useState(FORM_VACIO)
   const [errores, setErrores] = useState({})
+  const [archivo, setArchivo] = useState(null)
+  const [previewUrl, setPreviewUrl] = useState(null)
+  const [imagenEliminada, setImagenEliminada] = useState(false)
 
   useEffect(() => {
     if (auditorio) {
@@ -22,11 +25,25 @@ export default function AuditorioModal({ auditorio, onClose, onGuardar }) {
         equipamiento: auditorio.equipamiento || [],
         estado:       auditorio.estado,
       })
+      if (auditorio.image) {
+        setPreviewUrl(`/uploads/auditorios/${auditorio.image}`)
+      }
     } else {
       setForm(FORM_VACIO)
+      setPreviewUrl(null)
     }
+    setArchivo(null)
+    setImagenEliminada(false)
     setErrores({})
   }, [auditorio])
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl && previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(previewUrl)
+      }
+    }
+  }, [])
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -41,6 +58,25 @@ export default function AuditorioModal({ auditorio, onClose, onGuardar }) {
         ? p.equipamiento.filter((e) => e !== eq)
         : [...p.equipamiento, eq],
     }))
+
+  const handleArchivoChange = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (previewUrl && previewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(previewUrl)
+    }
+    setArchivo(file)
+    setPreviewUrl(URL.createObjectURL(file))
+  }
+
+  const eliminarImagen = () => {
+    if (previewUrl && previewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(previewUrl)
+    }
+    setArchivo(null)
+    setPreviewUrl(null)
+    setImagenEliminada(true)
+  }
 
   const validar = () => {
     const e = {}
@@ -58,6 +94,9 @@ export default function AuditorioModal({ auditorio, onClose, onGuardar }) {
       capacidad: Number(form.capacidad),
       id: auditorio?.id,
       equipamiento: form.equipamiento,
+      archivo,
+      imagenActual: (auditorio?.image && auditorio.image !== '{}') ? auditorio.image : null,
+      imagenEliminada,
     })
   }
 
@@ -134,12 +173,33 @@ export default function AuditorioModal({ auditorio, onClose, onGuardar }) {
             <span className="text-sm text-gray-600">{form.estado === 'ACTIVO' ? 'Activo' : 'Inactivo'}</span>
           </div>
 
-          {/* Foto placeholder */}
+          {/* Imagen */}
           <div>
             <label className="label-field">Foto del auditorio</label>
-            <div className="border-2 border-dashed border-[#E0E0E0] rounded-lg p-6 text-center text-sm text-gray-400 hover:border-[#C8A84B] cursor-pointer transition-colors">
-              Haz clic para subir imagen (funcionalidad en desarrollo)
-            </div>
+            {previewUrl ? (
+              <div className="relative rounded-lg overflow-hidden border border-[#E0E0E0]">
+                <img src={previewUrl} alt="Vista previa" className="w-full h-44 object-cover" />
+                <button
+                  type="button"
+                  onClick={eliminarImagen}
+                  className="absolute top-2 right-2 bg-white/90 hover:bg-white rounded-full p-1.5 shadow transition"
+                >
+                  <Trash2 size={16} className="text-[#C8171E]" />
+                </button>
+              </div>
+            ) : (
+              <label className="border-2 border-dashed border-[#E0E0E0] rounded-lg p-6 flex flex-col items-center gap-2 text-sm text-gray-400 hover:border-[#C8A84B] cursor-pointer transition-colors">
+                <Upload size={24} className="text-gray-300" />
+                <span>Haz clic para subir imagen</span>
+                <span className="text-xs">JPEG, PNG, GIF o WebP — Máx 5 MB</span>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  onChange={handleArchivoChange}
+                  className="hidden"
+                />
+              </label>
+            )}
           </div>
 
           {/* Acciones */}

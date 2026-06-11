@@ -12,11 +12,12 @@ function getExternalType(tipo) {
 //    Un admin debe aprobar la solicitud para que se cree la reserva.
 const createFromForm = async (req, res) => {
     const {
-        nombreEntidad, tipoEntidad, nit,
+        nombreEntidad, tipoEntidad,
         nombreContacto, cargoContacto, correoContacto, telefonoContacto,
         sede, auditorioNombre, fecha, horaInicio, horaFin,
         nombreEvento, tipoEvento, descripcionEvento, numAsistentes, requiereEquipos
     } = req.body;
+    const nit = req.body.archivoRutPath || null;
 
     if (!auditorioNombre || !nombreEvento || !numAsistentes ||
         !nombreContacto || !telefonoContacto || !correoContacto ||
@@ -33,7 +34,7 @@ const createFromForm = async (req, res) => {
 
     const OFFSET_MINUTES = 300;
     const MIN_START_MINUTES = 6 * 60;
-    const MAX_END_MINUTES = 23 * 60;
+    const MAX_END_MINUTES = 21 * 60;
 
     const toColombiaMinutes = (date) => {
         const utcMinutes = date.getUTCHours() * 60 + date.getUTCMinutes();
@@ -50,7 +51,7 @@ const createFromForm = async (req, res) => {
         return res.status(400).json({ error: 'El evento no puede iniciar antes de las 6:00am' });
     }
     if (endMinutesCol <= startMinutesCol || endMinutesCol > MAX_END_MINUTES) {
-        return res.status(400).json({ error: 'El evento no puede terminar después de las 11:00pm' });
+        return res.status(400).json({ error: 'El evento no puede terminar después de las 9:00pm' });
     }
 
     try {
@@ -125,7 +126,9 @@ const createFromForm = async (req, res) => {
             tipoEvento || null,
             descripcionEvento || null,
             parseInt(numAsistentes) || null,
-            requiereEquipos ? JSON.stringify(requiereEquipos) : null,
+            requiereEquipos
+                ? (typeof requiereEquipos === 'string' ? requiereEquipos : JSON.stringify(requiereEquipos))
+                : null,
             tarifaAplicada,
         ]);
 
@@ -227,7 +230,23 @@ const approve = async (req, res) => {
 
             const extType = getExternalType(solicitud.tipo_entidad);
             let appliedTariffId = null;
-            const totalCost = solicitud.tarifa_aplicada;
+            const tarifa = Number(solicitud.tarifa_aplicada) || 0;
+            let costoEquipos = 0;
+            if (solicitud.requiere_equipos) {
+                let equipos = solicitud.requiere_equipos;
+                if (typeof equipos === 'string') {
+                    try { equipos = JSON.parse(equipos); } catch { equipos = []; }
+                }
+                if (Array.isArray(equipos)) {
+                    equipos.forEach(eq => {
+                        if (typeof eq === 'object') {
+                            const unitPrice = eq.precioUnitario || eq.preciounitario || eq.precio || 0;
+                            costoEquipos += (Number(eq.cantidad) || 1) * Number(unitPrice);
+                        }
+                    });
+                }
+            }
+            const totalCost = tarifa + costoEquipos;
             try {
                 const tariffResult = await pool.query(`
                     SELECT id FROM tariffs
@@ -280,27 +299,45 @@ const approve = async (req, res) => {
             const reservationId = reservaResult.rows[0].id;
             const usuario = req.user?.full_name || req.user?.email || 'Admin';
 
-            await pool.query(`
-                INSERT INTO reservation_history (reservation_id, accion, usuario, descripcion)
-                VALUES ($1, 'APROBADA', $2, $3)
-            `, [reservationId, usuario, `Solicitud externa aprobada (fase 1) — "${solicitud.nombre_evento}"`]);
-
-            // Crear pago fase 1
+            // Crear pago
             await pool.query(`
                 INSERT INTO payments (reservation_id, amount, payment_phase, due_date, paid_at)
                 VALUES ($1, $2, 1, NOW(), NOW())
             `, [reservationId, Number(monto)]);
 
-            // Actualizar solicitud
-            await pool.query(`
-                UPDATE external_requests
-                SET estado = 'PRE_APROBADA', estado_pago = 'PARCIAL',
-                    reservation_id = $1, monto_fase1 = $3,
-                    referencia_fase1 = $4, nota_admin = $5, updated_at = NOW()
-                WHERE id = $2
-            `, [reservationId, id, Number(monto), referenciaPago || null, notaAdmin || null]);
+            // Decidir si es pago completo (1 fase) o parcial (2 fases)
+            const pagoCompleto = Number(monto) >= totalCost;
+            if (pagoCompleto) {
+                await pool.query(`
+                    INSERT INTO reservation_history (reservation_id, accion, usuario, descripcion)
+                    VALUES ($1, 'APROBADA', $2, $3)
+                `, [reservationId, usuario, `Solicitud externa aprobada (pago completo) — "${solicitud.nombre_evento}"`]);
 
-            return res.json({ message: 'Fase 1 aprobada — reserva creada en calendario', reservationId });
+                await pool.query(`
+                    UPDATE external_requests
+                    SET estado = 'APROBADA', estado_pago = 'PAGADO',
+                        reservation_id = $1, monto_fase1 = $3,
+                        referencia_fase1 = $4, nota_admin = $5, updated_at = NOW()
+                    WHERE id = $2
+                `, [reservationId, id, Number(monto), referenciaPago || null, notaAdmin || null]);
+
+                return res.json({ message: 'Solicitud aprobada — pago completo registrado', reservationId });
+            } else {
+                await pool.query(`
+                    INSERT INTO reservation_history (reservation_id, accion, usuario, descripcion)
+                    VALUES ($1, 'APROBADA', $2, $3)
+                `, [reservationId, usuario, `Solicitud externa aprobada (fase 1) — "${solicitud.nombre_evento}"`]);
+
+                await pool.query(`
+                    UPDATE external_requests
+                    SET estado = 'PRE_APROBADA', estado_pago = 'PARCIAL',
+                        reservation_id = $1, monto_fase1 = $3,
+                        referencia_fase1 = $4, nota_admin = $5, updated_at = NOW()
+                    WHERE id = $2
+                `, [reservationId, id, Number(monto), referenciaPago || null, notaAdmin || null]);
+
+                return res.json({ message: 'Fase 1 aprobada — reserva creada en calendario', reservationId });
+            }
         }
 
         // ── FASE 2 ──────────────────────────────────────────────────────
@@ -350,6 +387,128 @@ const approve = async (req, res) => {
         console.error('Error al aprobar solicitud:', error.message, error.stack);
         console.error('Body recibido:', req.body);
         console.error('Params:', req.params);
+        res.status(500).json({ error: error.message || 'Error del servidor al aprobar la solicitud', details: error.message });
+    }
+};
+
+// ── Aprobar solicitud sin pago (usuarios universitarios / exento) ────────
+const approveFree = async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const reqResult = await pool.query(
+            'SELECT * FROM external_requests WHERE id = $1', [id]
+        );
+        if (reqResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Solicitud no encontrada' });
+        }
+        const solicitud = reqResult.rows[0];
+
+        if (solicitud.estado !== 'PENDIENTE') {
+            return res.status(400).json({ error: `La solicitud ya fue ${solicitud.estado.toLowerCase()}` });
+        }
+
+        // Buscar auditorium_id
+        let auditoriumId;
+        const simpleName = (solicitud.auditorio_nombre || '').replace(/\d+\/\d+/g, '').trim();
+        const keywords = simpleName.split(/\s+/).filter(w => w.length > 2).slice(0, 3);
+        if (keywords.length > 0) {
+            const likePattern = '%' + keywords.join('%') + '%';
+            const result = await pool.query(
+                `SELECT id FROM auditoriums WHERE name ILIKE $1 AND is_active = TRUE LIMIT 1`,
+                [likePattern]
+            );
+            if (result.rows.length > 0) auditoriumId = result.rows[0].id;
+        }
+        if (!auditoriumId) {
+            const fallback = await pool.query(`SELECT id FROM auditoriums WHERE is_active = TRUE LIMIT 1`);
+            if (fallback.rows.length === 0) {
+                return res.status(404).json({ error: 'No hay auditorios activos disponibles' });
+            }
+            auditoriumId = fallback.rows[0].id;
+        }
+
+        const fechaStr = solicitud.fecha instanceof Date
+            ? solicitud.fecha.toISOString().split('T')[0]
+            : solicitud.fecha;
+        const eventStart = new Date(`${fechaStr}T${solicitud.hora_inicio}:00.000-05:00`);
+        const [hI, mI] = solicitud.hora_inicio.split(':').map(Number);
+        const [hF, mF] = solicitud.hora_fin.split(':').map(Number);
+        const duracion = (hF * 60 + mF - hI * 60 - mI) / 60;
+        const eventEnd = new Date(eventStart.getTime() + duracion * 60 * 60 * 1000);
+
+        const extType = getExternalType(solicitud.tipo_entidad);
+        let appliedTariffId = null;
+        try {
+            const tariffResult = await pool.query(`
+                SELECT id FROM tariffs
+                WHERE auditorium_id = $1
+                  AND external_type = $2::external_type
+                  AND hours = $3
+                  AND effective_from <= CURRENT_DATE
+                ORDER BY effective_from DESC LIMIT 1
+            `, [auditoriumId, extType, duracion]);
+            if (tariffResult.rows.length > 0) appliedTariffId = tariffResult.rows[0].id;
+        } catch (_) {}
+
+        // Verificar conflicto
+        const conflict = await pool.query(`
+            SELECT id FROM reservations
+            WHERE auditorium_id = $1
+              AND status IN ('pendiente', 'aprobada')
+              AND event_start < $3
+              AND event_end   > $2
+            LIMIT 1
+        `, [auditoriumId, eventStart, eventEnd]);
+        if (conflict.rows.length > 0) {
+            return res.status(409).json({ error: 'El horario solicitado se cruza con una reserva existente' });
+        }
+
+        // Crear reserva con status 'aprobada'
+        const reservaResult = await pool.query(`
+            INSERT INTO reservations (
+                auditorium_id, event_name, attendees_count,
+                responsible_person, applicant_name, applicant_phone,
+                applicant_email, applicant_external_type,
+                event_start, event_end, applied_tariff_id, total_cost, notes, status
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'aprobada')
+            RETURNING id
+        `, [
+            auditoriumId,
+            solicitud.nombre_evento,
+            Math.max(1, solicitud.num_asistentes || 1),
+            solicitud.nombre_contacto,
+            solicitud.nombre_contacto,
+            solicitud.telefono_contacto,
+            solicitud.correo_contacto,
+            extType,
+            eventStart,
+            eventEnd,
+            appliedTariffId,
+            0,
+            null,
+        ]);
+        const reservationId = reservaResult.rows[0].id;
+        const usuario = req.user?.full_name || req.user?.email || 'Admin';
+
+        await pool.query(`
+            INSERT INTO reservation_history (reservation_id, accion, usuario, descripcion)
+            VALUES ($1, 'APROBADA', $2, $3)
+        `, [reservationId, usuario, `Solicitud externa aprobada (exento) — "${solicitud.nombre_evento}"`]);
+
+        // Actualizar solicitud
+        await pool.query(`
+            UPDATE external_requests
+            SET estado = 'APROBADA', estado_pago = 'EXENTO',
+                reservation_id = $1, tarifa_aplicada = 0,
+                nota_admin = $2, updated_at = NOW()
+            WHERE id = $3
+        `, [reservationId, req.body.notaAdmin || null, id]);
+
+        return res.json({ message: 'Solicitud aprobada sin pago — reserva creada en calendario', reservationId });
+
+    } catch (error) {
+        console.error('Error al aprobar solicitud sin pago:', error.message, error.stack);
         res.status(500).json({ error: error.message || 'Error del servidor al aprobar la solicitud', details: error.message });
     }
 };
@@ -423,4 +582,4 @@ const cancel = async (req, res) => {
     }
 };
 
-module.exports = { createFromForm, list, getOne, approve, reject, registerPayment, cancel };
+module.exports = { createFromForm, list, getOne, approve, approveFree, reject, registerPayment, cancel };

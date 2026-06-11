@@ -177,7 +177,16 @@ function TablaDesktop({ solicitudes, onVerDetalle }) {
                   <p className="font-medium text-gray-800 truncate">
                     {s.nombreEntidad || s.nombreContacto}
                   </p>
-                  {s.nit && (
+                  {s.nit && s.nit.includes('.pdf') ? (
+                    <a
+                      href={`/uploads/ruts/${s.nit.split(/[\\/]/).pop()}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-[#C8171E] underline hover:text-[#a01016]"
+                    >
+                      Ver RUT (PDF)
+                    </a>
+                  ) : s.nit && (
                     <p className="text-xs text-gray-400 font-mono">{s.nit}</p>
                   )}
                 </td>
@@ -185,7 +194,7 @@ function TablaDesktop({ solicitudes, onVerDetalle }) {
                 <td className="px-2.5 py-2 whitespace-nowrap">
                   <span className="text-gray-800">{s.auditorio}</span>
                   <p className="text-xs text-gray-400">
-                    {s.sede.charAt(0) + s.sede.slice(1).toLowerCase()}
+                    {s.sede ? s.sede.charAt(0).toUpperCase() + s.sede.slice(1).toLowerCase() : '-'}
                   </p>
                 </td>
                 <td className="px-2.5 py-2 whitespace-nowrap">
@@ -294,7 +303,6 @@ export default function SolicitudesExternas() {
         !s.nombreEntidad?.toLowerCase().includes(bq) &&
         !s.nombreContacto?.toLowerCase().includes(bq) &&
         !s.nombreEvento?.toLowerCase().includes(bq) &&
-        !s.nit?.toLowerCase().includes(bq) &&
         !s.id?.toLowerCase().includes(bq)
       ) return false
       if (filtros.estado !== 'Todos' && s.estado !== filtros.estado) return false

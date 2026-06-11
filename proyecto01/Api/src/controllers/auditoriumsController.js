@@ -1,35 +1,27 @@
 // src/controllers/auditoriumsController.js
 const pool = require('../../DB/db');
+const path = require('path');
+const fs = require('fs');
 
-// ── Helper: resolver ID numérico (frontend mock) a UUID de la BD ───────
-const AUDITORIUM_NAME_MAP = {
-  1: 'Benjamín Herrera',
-  2: 'Rodrigo Rivera',
-  3: 'Sala Auxiliar 1',
-  4: 'Sala de Sistemas 1',
-};
+const UPLOAD_DIR = path.join(__dirname, '..', '..', 'uploads', 'auditorios');
 
+// ── Helper: validar / resolver ID de auditorio ─────────────────────────
 async function resolveAuditoriumId(param) {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (uuidRegex.test(param)) return param;
-
-  const nombre = AUDITORIUM_NAME_MAP[param];
-  if (nombre) {
-    const palabras = nombre.split(/\s+/).filter(w => w.length > 2).slice(0, 2);
-    const pattern = '%' + palabras.join('%') + '%';
-    const result = await pool.query(
-      'SELECT id FROM auditoriums WHERE name ILIKE $1 LIMIT 1',
-      [pattern]
+  if (!uuidRegex.test(param)) {
+    const fallback = await pool.query(
+      'SELECT id FROM auditoriums WHERE is_active = TRUE LIMIT 1'
     );
-    if (result.rows.length > 0) return result.rows[0].id;
+    return fallback.rows.length > 0 ? fallback.rows[0].id : param;
   }
-
-  const fallback = await pool.query(
-    'SELECT id FROM auditoriums WHERE is_active = TRUE LIMIT 1'
-  );
-  if (fallback.rows.length > 0) return fallback.rows[0].id;
-
   return param;
+}
+
+function sanitizarRows(rows) {
+    return rows.map(r => {
+        if (r.image === '{}' || r.image === '') r.image = null;
+        return r;
+    });
 }
 
 const getauditoriums = async (req, res) => {
@@ -39,7 +31,7 @@ const getauditoriums = async (req, res) => {
             ? 'SELECT * FROM auditoriums'
             : 'SELECT * FROM auditoriums WHERE is_active = TRUE';
         const result = await pool.query(sql);
-        res.json(result.rows);
+        res.json(sanitizarRows(result.rows));
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Error del servidor' });
@@ -49,7 +41,7 @@ const getauditoriums = async (req, res) => {
 const getActiveauditoriums = async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM auditoriums WHERE is_active = TRUE');
-        res.json(result.rows);
+        res.json(sanitizarRows(result.rows));
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Error del servidor' });
@@ -69,6 +61,7 @@ const getAuditoriumById = async (req, res) => {
 
 const createAuditorium = async (req, res) => {
     const { name, location, capacity, description } = req.body;
+    const image = req.file?.filename || req.body.image || null;
 
     if (!name || !location || !capacity) {
         return res.status(400).json({ error: 'Nombre, sede y capacidad son requeridos' });
@@ -76,10 +69,10 @@ const createAuditorium = async (req, res) => {
 
     try {
         const result = await pool.query(`
-            INSERT INTO auditoriums (name, location, capacity, description, is_active)
-            VALUES ($1, $2, $3, $4, TRUE)
+            INSERT INTO auditoriums (name, location, capacity, description, image, is_active)
+            VALUES ($1, $2, $3, $4, $5, TRUE)
             RETURNING *
-        `, [name, location, capacity, description || null]);
+        `, [name, location, capacity, description || null, image]);
 
         res.status(201).json(result.rows[0]);
     } catch (error) {
@@ -90,11 +83,21 @@ const createAuditorium = async (req, res) => {
 
 const updateAuditorium = async (req, res) => {
     const { name, location, capacity, description, is_active } = req.body;
+    const image = req.file?.filename || req.body.image || null;
 
     try {
         const existing = await pool.query('SELECT * FROM auditoriums WHERE id = $1', [req.params.id]);
         if (existing.rows.length === 0) {
             return res.status(404).json({ error: 'Auditorio no encontrado' });
+        }
+
+        const oldImage = existing.rows[0].image;
+
+        if (oldImage && oldImage !== image) {
+            const oldPath = path.join(UPLOAD_DIR, oldImage);
+            if (fs.existsSync(oldPath)) {
+                fs.unlinkSync(oldPath);
+            }
         }
 
         const result = await pool.query(`
@@ -103,10 +106,11 @@ const updateAuditorium = async (req, res) => {
                 location = COALESCE($2, location),
                 capacity = COALESCE($3, capacity),
                 description = COALESCE($4, description),
-                is_active = COALESCE($5, is_active)
-            WHERE id = $6
+                image = $5,
+                is_active = COALESCE($6, is_active)
+            WHERE id = $7
             RETURNING *
-        `, [name, location, capacity, description, is_active, req.params.id]);
+        `, [name, location, capacity, description, image !== undefined ? image : null, is_active, req.params.id]);
 
         res.json(result.rows[0]);
     } catch (error) {

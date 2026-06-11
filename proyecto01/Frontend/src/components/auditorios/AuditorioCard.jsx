@@ -13,6 +13,21 @@ export default function AuditorioCard({ auditorio, onEditar, onToggleEstado }) {
 
   return (
     <div className={`card p-5 flex flex-col gap-4 transition-opacity ${activo ? '' : 'opacity-70'}`}>
+      {/* Imagen */}
+      {auditorio.image ? (
+        <div className="-mx-5 -mt-5 mb-2 h-40 overflow-hidden">
+          <img
+            src={`/uploads/auditorios/${auditorio.image}`}
+            alt={auditorio.nombre}
+            className="w-full h-full object-cover"
+          />
+        </div>
+      ) : (
+        <div className="-mx-5 -mt-5 mb-2 h-36 bg-gray-100 flex items-center justify-center">
+          <span className="text-gray-300 text-sm">Sin imagen</span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div>

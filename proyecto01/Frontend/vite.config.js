@@ -9,7 +9,10 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
-        // Las rutas ahora incluyen /api/, se pasan sin modificar
+      },
+      '/uploads': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
       },
     },
   },

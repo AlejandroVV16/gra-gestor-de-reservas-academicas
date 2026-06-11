@@ -19,6 +19,12 @@ const login = async (req, res) => {
         if (!valid)
             return res.status(401).json({ error: 'Credenciales inválidas' });
 
+        if (user.user_type === 'interno') {
+            return res.status(403).json({
+                error: 'Los usuarios de facultad deben realizar su solicitud a través del formulario público de solicitud externa'
+            });
+        }
+
         await pool.query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
 
         const token = jwt.sign(
